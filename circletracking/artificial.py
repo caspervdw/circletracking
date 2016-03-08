@@ -17,7 +17,7 @@ def crop_pad(image, corner, shape):
         no_padding = [(0, 0)] * (image.ndim - ndim)
         padding = [(max(-c, 0), max(c + s - o, 0)) for (c, s, o) in zipped]
         corner = [c + max(-c, 0) for c in corner]
-        image_temp = np.pad(image, no_padding + padding, mode='constant')
+        image_temp = np.pad(image, no_padding + padding, mode=str('constant'))
     else:
         image_temp = image
 
