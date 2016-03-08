@@ -136,5 +136,5 @@ def locate_ellipsoid(frame, spacing=1, rad_range=None, maxfit_size=2,
     return pd.Series(params, index=columns), r
 
 
-def locate_multiple_disks(image):
-    pass
+# def locate_multiple_disks(image):
+#     pass

@@ -58,8 +58,8 @@ def fit_max_2d(arr, maxfit_size=2, threshold=0.1):
     return r_dev + maxes
 
 
-def fit_edge_2d(arr, threshold=None):
-    pass
+# def fit_edge_2d(arr, threshold=None):
+#     pass
 
 
 def refine_ellipse(image, params, mode='ellipse_aligned', n=None,
@@ -244,7 +244,7 @@ def refine_ellipsoid(image3d, params, spacing=1, rad_range=None, maxfit_size=2,
                                          return_mode='skew')
     return tuple(radius) + tuple(center) + tuple(skew), coord_new.T
 
-def refine_multiple(image, params, **kwargs):
-    fit = pandas.DataFrame(columns=['r', 'y', 'x', 'dev'])
-    for i, blob in blobs.iterrows():
-        fit = pandas.concat([fit, find_ellipse(image, blob, **kwargs)], ignore_index=True)
+# def refine_multiple(image, params, **kwargs):
+#     fit = pandas.DataFrame(columns=['r', 'y', 'x', 'dev'])
+#     for i, blob in blobs.iterrows():
+#         fit = pandas.concat([fit, find_ellipse(image, blob, **kwargs)], ignore_index=True)
