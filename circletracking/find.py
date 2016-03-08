@@ -2,7 +2,10 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 import six
 import numpy as np
-from skimage.filters import threshold_otsu
+try:
+    from skimage.filters import threshold_otsu
+except ImportError:
+    from skimage.filter import threshold_otsu  # skimage <= 0.10
 from skimage.measure import find_contours
 
 from numpy.testing import assert_allclose
