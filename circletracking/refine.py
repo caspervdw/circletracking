@@ -2,9 +2,6 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 import six
 import numpy as np
-import pandas as pd
-from skimage.filters import threshold_otsu
-from skimage.measure import find_contours
 from scipy.ndimage.interpolation import map_coordinates
 
 from numpy.testing import assert_allclose
@@ -61,90 +58,8 @@ def fit_max_2d(arr, maxfit_size=2, threshold=0.1):
     return r_dev + maxes
 
 
-def find_ellipse(image, mode='ellipse_aligned', min_length=24):
-    """ Thresholds the image, finds the longest contour and fits an ellipse
-    to this contour.
-
-    Parameters
-    ----------
-    image : 2D numpy array of numbers
-    mode : {'ellipse', 'ellipse_aligned', 'circle'}
-    min_length : number
-        minimum length of contour
-
-    Returns
-    -------
-    yr, xr, yc, xc when dimension order was y, x (common)
-    xr, yr, xc, yc when dimension order was x, y
-    """
-    assert image.ndim == 2
-    thresh = threshold_otsu(image)
-    binary = image > thresh
-    contours = find_contours(binary, 0.5, fully_connected='high')
-    if len(contours) == 0:
-        raise ValueError('No contours found')
-    
-    # eliminate short contours
-    contours = [c for c in contours if len(c) >= min_length]
-
-    # fit circles to the rest, keep the one with lowest residual deviation
-    result = [np.nan] * 4
-    residual = None
-    for c in contours:
-        try:
-            (xr, yr), (xc, yc), _ = fit_ellipse(c.T, mode=mode)
-            if np.any(np.isnan([xr, yr, xc, yc])):
-                continue
-            x, y = c.T
-            r = np.sum((((xc - x)/xr)**2 + ((yc - y)/yr)**2 - 1)**2)/len(c)
-            if residual is None or r < residual:
-                result = xr, yr, xc, yc
-                residual = r
-        except np.linalg.LinAlgError:
-            pass
-
-    return result
-
-
-def find_ellipsoid(image3d, center_atol=None):
-    """ Finds ellipses in all three projections of the 3D image and returns
-    center coordinates and priciple radii.
-
-    The function uses the YX projection for the yr, xr, yc, xc and the ZX
-    projection for zr, xc. The ZY projection can be used for sanity checking
-    the found center.
-
-    Parameters
-    ----------
-    image3d : 3D numpy array of numbers
-    center_atol : float, optional
-        the maximum absolute tolerance for the difference between the found
-        centers, Default None
-
-    Returns
-    -------
-    zr, yr, xr, zc, yc, xc
-    """
-    assert image3d.ndim == 3
-
-    # Y, X projection, use y radius because resonant scanning in x direction.
-    image = np.mean(image3d, axis=0)
-    yr, xr, yc, xc = find_ellipse(image, mode='ellipse_aligned')
-
-    # Z, X projection
-    image = np.mean(image3d, axis=1)
-    zr, xr2, zc, xc2 = find_ellipse(image, mode='ellipse_aligned')
-
-    if center_atol is not None:
-        # Z, Y projection (noisy with resonant scanning)
-        image = np.mean(image3d, axis=2)
-        zr2, yr2, zc2, yc2 = find_ellipse(image, mode='ellipse_aligned')
-
-        assert_allclose([xc, yc, zc],
-                        [xc2, yc2, zc2], rtol=0, atol=center_atol,
-                        err_msg='Found centers have inconsistent values.')
-
-    return zr, yr, xr, zc, yc, xc
+def fit_edge_2d(arr, threshold=None):
+    pass
 
 
 def refine_ellipse(image, params, mode='ellipse_aligned', n=None,
@@ -329,131 +244,7 @@ def refine_ellipsoid(image3d, params, spacing=1, rad_range=None, maxfit_size=2,
                                          return_mode='skew')
     return tuple(radius) + tuple(center) + tuple(skew), coord_new.T
 
-
-def locate_ellipse(frame, mode='ellipse_aligned', n=None, rad_range=None,
-                   maxfit_size=2, spline_order=3, threshold=0.1):
-    """Locates an ellipse in a 2D image and returns center coordinates and
-    radii along x, y.
-
-    Parameters
-    ----------
-    frame: ndarray
-    n : int
-        number of points on the ellipse that are used for refine
-    spacing: float
-        spacing between points on an xy circle, for grid
-    rad_range: tuple of floats
-        length of the line (distance inwards, distance outwards)
-    maxfit_size: integer
-        pixels around maximum pixel that will be used in linear regression
-    spline_order: integer
-        interpolation order for edge crossections
-    threshold: float
-        a threshold is calculated based on the global maximum
-        fitregions are rejected if their average value is lower than this
-
-    Returns
-    -------
-    Series with yr, xr, yc, xc indices
-    ndarray with (y, x) contour
-    """
-    assert frame.ndim == 2
-    columns = ['yr', 'xr', 'yc', 'xc']
-    try:
-        params = find_ellipse(frame, mode)
-        params, r = refine_ellipse(frame, params, mode, n, rad_range,
-                                   maxfit_size, spline_order, threshold)
-    except Exception:
-        params = [np.nan] * 4
-        r = None
-
-    return pd.Series(params, index=columns), r
-
-
-def locate_ellipsoid_fast(frame, n_xy=None, n_xz=None, rad_range=None,
-                          maxfit_size=2, spline_order=3, threshold=0.1,
-                          radius_rtol=0.5, radius_atol=30.0, center_atol=30.0):
-    """Locates an ellipsoid in a 3D image and returns center coordinates and
-    radii along x, y, z. The function only analyzes YX and ZX middle slices.
-
-    Parameters
-    ----------
-    image3d: 3D ndarray
-    n_xy: integer
-        number of points on the ellipse that are used for refine in xy plane
-    n_xz: integer
-        number of points on the ellipse that are used for refine in xz plane
-    rad_range: tuple of floats
-        length of the line (distance inwards, distance outwards)
-    maxfit_size: integer
-        pixels around maximum pixel that will be used in linear regression
-    spline_order: integer
-        interpolation order for edge crossections
-    threshold: float
-        a threshold is calculated based on the global maximum
-        fitregions are rejected if their average value is lower than this
-    radius_rtol : float, optional
-        the maximum relative tolerance for the difference between initial
-        and refined radii, Default 0.5
-    radius_atol : float, optional
-        the maximum absolute tolerance for the difference between initial
-        and refined radii, Default 30.
-    center_atol : float, optional
-        the maximum absolute tolerance for the difference between initial
-        and refined radii, Default 30.
-
-    Returns
-    -------
-    Series with zr, yr, xr, zc, yc, xc indices, ndarray with (y, x) contour
-    """
-    assert frame.ndim == 3
-    columns = ['zr', 'yr', 'xr', 'zc', 'yc', 'xc']
-    try:
-        params = find_ellipsoid(frame)
-        params, r = refine_ellipsoid_fast(frame, params, n_xy, n_xz, rad_range,
-                                          maxfit_size, spline_order, threshold,
-                                          radius_rtol, radius_atol, center_atol)
-    except Exception:
-        params = [np.nan] * 6
-        r = None
-
-    return pd.Series(params, index=columns), r
-
-
-def locate_ellipsoid(frame, spacing=1, rad_range=None, maxfit_size=2,
-                     spline_order=3, threshold=0.1):
-    """Locates an ellipsoid in a 3D image and returns center coordinates and
-    radii along x, y, z. The function fully analyzes the vesicle.
-
-    Parameters
-    ----------
-    image3d: 3D ndarray
-    spacing: float
-        spacing between points on an xy circle, for grid
-    rad_range: tuple of floats
-        length of the line (distance inwards, distance outwards)
-    maxfit_size: integer
-        pixels around maximum pixel that will be used in linear regression
-    spline_order: integer
-        interpolation order for edge crossections
-    threshold: float
-        a threshold is calculated based on the global maximum
-        fitregions are rejected if their average value is lower than this
-
-    Returns
-    -------
-    Series with zr, yr, xr, zc, yc, xc, skew_y, skew_x indices
-    ndarray with (y, x) contour
-    """
-    assert frame.ndim == 3
-    columns = ['zr', 'yr', 'xr', 'zc', 'yc', 'xc', 'skew_y', 'skew_x']
-    try:
-        params = find_ellipsoid(frame)
-        params, r = refine_ellipsoid(frame, params, spacing, rad_range,
-                                     maxfit_size, spline_order, threshold)
-        r = r[np.abs(r[:, 0] - params[3]) < 0.5]  # extract center coords
-    except Exception:
-        params = [np.nan] * 8
-        r = None
-
-    return pd.Series(params, index=columns), r
+def refine_multiple(image, params, **kwargs):
+    fit = pandas.DataFrame(columns=['r', 'y', 'x', 'dev'])
+    for i, blob in blobs.iterrows():
+        fit = pandas.concat([fit, find_ellipse(image, blob, **kwargs)], ignore_index=True)
