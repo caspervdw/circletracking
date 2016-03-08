@@ -32,9 +32,9 @@ setup_parameters = dict(
     author = "Casper van der Wel",
     author_email = "caspervdw@gmail.com",
     url = "https://github.com/caspervdw/circletracking",
-    install_requires = ['numpy>=1.9', 'scipy>=0.16', 'six>=1.8',
-	                    'pandas>=0.16', 'scikit-image>=0.11',
-                        'matplotlib>=1.4'],
+    install_requires = ['numpy>=1.8', 'scipy>=0.13', 'six>=1.8',
+	                    'pandas>=0.13', 'scikit-image>=0.9',
+                        'matplotlib>=1.3'],
     packages = ['circletracking'],
     long_description = descr,
 )
