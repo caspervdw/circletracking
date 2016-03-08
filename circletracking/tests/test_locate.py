@@ -1,9 +1,9 @@
 from __future__ import (division, unicode_literals)
 
 import numpy as np
-from circletracking import (ellipse_grid, ellipsoid_grid,
-                            gen_artificial_ellipsoid, fit_ellipse,
-                            fit_ellipsoid, find_ellipsoid,
+from circletracking import (ellipse_grid, ellipsoid_grid, locate_ellipse,
+                            draw_ellipse, draw_ellipsoid, fit_ellipse,
+                            fit_ellipsoid, find_ellipsoid, find_ellipse,
                             locate_ellipsoid, locate_ellipsoid_fast)
 import unittest
 import nose
@@ -150,6 +150,83 @@ class TestFits(unittest.TestCase):
         assert_allclose(radius, result[0], atol=0.1)
         assert_allclose(center, result[1], atol=0.1)
 
+
+class TestEllipse(unittest.TestCase):
+    def setUp(self):
+        self.shape = (300, 300)
+        self.FWHM = 5
+        self.N = 10
+
+    def test_circle_no_refine(self):
+        NOREFINE_CENTER_ATOL = 1
+        NOREFINE_RADIUS_RTOL = 0.1
+        noise = 0.02
+        for _ in range(self.N):
+            radius = (np.random.random() * 50 + 50,) * 2
+            padding = [r + self.FWHM * 3 for r in radius]
+            center = tuple([np.random.random() * (s - 2 * p) + p
+                           for (s, p) in zip(self.shape, padding)])
+            im = draw_ellipse(self.shape, radius, center,
+                              FWHM=self.FWHM, noise=noise)
+            result = find_ellipse(im)
+            assert_allclose(result[0], radius[0], rtol=NOREFINE_RADIUS_RTOL)
+            assert_allclose(result[1], radius[1], rtol=NOREFINE_RADIUS_RTOL)
+            assert_allclose(result[2], center[0], atol=NOREFINE_CENTER_ATOL)
+            assert_allclose(result[3], center[1], atol=NOREFINE_CENTER_ATOL)
+
+    def test_circle_noisy(self):
+        NOISY_CENTER_ATOL = 0.1
+        NOISY_RADIUS_RTOL = 0.01
+        noise = 0.2
+        for _ in range(self.N):
+            radius = (np.random.random() * 50 + 50,) * 2
+            padding = [r + self.FWHM * 3 for r in radius]
+            center = tuple([np.random.random() * (s - 2 * p) + p
+                           for (s, p) in zip(self.shape, padding)])
+            im = draw_ellipse(self.shape, radius, center,
+                              FWHM=self.FWHM, noise=noise)
+            result, _ = locate_ellipse(im)
+            assert_allclose(result['yc'], center[0], atol=NOISY_CENTER_ATOL)
+            assert_allclose(result['xc'], center[1], atol=NOISY_CENTER_ATOL)
+            assert_allclose(result['yr'], radius[0], rtol=NOISY_RADIUS_RTOL)
+            assert_allclose(result['xr'], radius[1], rtol=NOISY_RADIUS_RTOL)
+
+
+    def test_circle(self):
+        CENTER_ATOL = 0.1
+        RADIUS_RTOL = 0.01
+        noise = 0.02
+        for _ in range(self.N):
+            radius = (np.random.random() * 50 + 50,) * 2
+            padding = [r + self.FWHM * 3 for r in radius]
+            center = tuple([np.random.random() * (s - 2 * p) + p
+                           for (s, p) in zip(self.shape, padding)])
+            im = draw_ellipse(self.shape, radius, center,
+                              FWHM=self.FWHM, noise=noise)
+            result, _ = locate_ellipse(im)
+            assert_allclose(result['yc'], center[0], atol=CENTER_ATOL)
+            assert_allclose(result['xc'], center[1], atol=CENTER_ATOL)
+            assert_allclose(result['yr'], radius[0], rtol=RADIUS_RTOL)
+            assert_allclose(result['xr'], radius[1], rtol=RADIUS_RTOL)
+
+    def test_ellipse(self):
+        CENTER_ATOL = 0.1
+        RADIUS_RTOL = 0.01
+        noise = 0.02
+        for _ in range(self.N):
+            radius = tuple(np.random.random(2) * 50 + 50,)
+            padding = [r + self.FWHM * 3 for r in radius]
+            center = tuple([np.random.random() * (s - 2 * p) + p
+                           for (s, p) in zip(self.shape, padding)])
+            im = draw_ellipse(self.shape, radius, center,
+                              FWHM=self.FWHM, noise=noise)
+            result, _ = locate_ellipse(im)
+            assert_allclose(result['yc'], center[0], atol=CENTER_ATOL)
+            assert_allclose(result['xc'], center[1], atol=CENTER_ATOL)
+            assert_allclose(result['yr'], radius[0], rtol=RADIUS_RTOL)
+            assert_allclose(result['xr'], radius[1], rtol=RADIUS_RTOL)
+
+
 class TestEllipsoid(unittest.TestCase):
     def setUp(self):
         self.shape = (250, 300, 300)
@@ -165,8 +242,8 @@ class TestEllipsoid(unittest.TestCase):
     def test_no_refine(self):
         NOREFINE_CENTER_ATOL = 1
         NOREFINE_RADIUS_RTOL = 0.1
-        im = gen_artificial_ellipsoid(self.shape, self.radius, self.center,
-                                      FWHM=self.FWHM, noise=self.noise)
+        im = draw_ellipsoid(self.shape, self.radius, self.center,
+                            FWHM=self.FWHM, noise=self.noise)
         result = find_ellipsoid(im)
         assert_allclose(result[0], self.radius[0], rtol=NOREFINE_RADIUS_RTOL)
         assert_allclose(result[1], self.radius[1], rtol=NOREFINE_RADIUS_RTOL)
@@ -178,8 +255,8 @@ class TestEllipsoid(unittest.TestCase):
     def test_locate_fast(self):
         CENTER_ATOL_FAST = 1
         RADIUS_RTOL_FAST = 0.05
-        im = gen_artificial_ellipsoid(self.shape, self.radius, self.center,
-                                      FWHM=self.FWHM, noise=self.noise)
+        im = draw_ellipsoid(self.shape, self.radius, self.center,
+                            FWHM=self.FWHM, noise=self.noise)
         result, _ = locate_ellipsoid_fast(im)
         assert_allclose(result['zc'], self.center[0], atol=CENTER_ATOL_FAST)
         assert_allclose(result['yc'], self.center[1], atol=CENTER_ATOL_FAST)
@@ -192,8 +269,8 @@ class TestEllipsoid(unittest.TestCase):
         NOISY_CENTER_ATOL = 0.5
         NOISY_RADIUS_RTOL = 0.05
         noise = 0.2
-        im = gen_artificial_ellipsoid(self.shape, self.radius, self.center,
-                                      FWHM=self.FWHM, noise=noise)
+        im = draw_ellipsoid(self.shape, self.radius, self.center,
+                            FWHM=self.FWHM, noise=noise)
         result, _ = locate_ellipsoid(im)
         assert_allclose(result['zc'], self.center[0], atol=NOISY_CENTER_ATOL)
         assert_allclose(result['yc'], self.center[1], atol=NOISY_CENTER_ATOL)
@@ -205,8 +282,8 @@ class TestEllipsoid(unittest.TestCase):
     def test_locate(self):
         CENTER_ATOL = 0.1
         RADIUS_RTOL = 0.03
-        im = gen_artificial_ellipsoid(self.shape, self.radius, self.center,
-                                      FWHM=self.FWHM, noise=self.noise)
+        im = draw_ellipsoid(self.shape, self.radius, self.center,
+                            FWHM=self.FWHM, noise=self.noise)
         result, _ = locate_ellipsoid(im)
         assert_allclose(result['zc'], self.center[0], atol=CENTER_ATOL)
         assert_allclose(result['yc'], self.center[1], atol=CENTER_ATOL)

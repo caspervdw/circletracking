@@ -26,7 +26,42 @@ def crop_pad(image, corner, shape):
     return image_temp[no_crop + crop]
 
 
-def gen_artificial_ellipsoid(shape, radius, center, FWHM, noise=0):
+def draw_ellipse(shape, radius, center, FWHM, noise=0):
+    sigma = FWHM / 2.35482
+    cutoff = 2 * FWHM
+
+    # draw a circle
+    R = max(radius)
+    zoom_factor = np.array(radius) / R
+    size = int((R + cutoff)*2)
+    c = size // 2
+    y, x = np.meshgrid(*([np.arange(size)] * 2), indexing='ij')
+    h = np.sqrt((y - c)**2+(x - c)**2) - R
+    mask = np.abs(h) < cutoff
+    im = np.zeros((size,)*2, dtype=np.float)
+    im[mask] += np.exp((h[mask] / sigma)**2/-2)/(sigma*np.sqrt(2*np.pi))
+
+    # zoom so that radii are ok
+    im = zoom(im, zoom_factor)
+
+    # shift and make correct shape
+    center_diff = center - np.array(center_of_mass(im))
+    left_padding = np.round(center_diff).astype(np.int)
+    subpx_shift = center_diff - left_padding
+
+    im = shift(im, subpx_shift)
+    im = crop_pad(im, -left_padding, shape)
+    im[im < 0] = 0
+
+    assert_almost_equal(center_of_mass(im), center, decimal=2)
+
+    if noise > 0:
+        im += np.random.random(shape) * noise * im.max()
+
+    return (im / im.max() * 255).astype(np.uint8)
+
+
+def draw_ellipsoid(shape, radius, center, FWHM, noise=0):
     sigma = FWHM / 2.35482
     cutoff = 2 * FWHM
 
