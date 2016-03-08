@@ -204,7 +204,7 @@ class TestEllipsoid(unittest.TestCase):
 
     def test_locate(self):
         CENTER_ATOL = 0.1
-        RADIUS_RTOL = 0.02
+        RADIUS_RTOL = 0.03
         im = gen_artificial_ellipsoid(self.shape, self.radius, self.center,
                                       FWHM=self.FWHM, noise=self.noise)
         result, _ = locate_ellipsoid(im)
