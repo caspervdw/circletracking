@@ -13,8 +13,8 @@ from numpy.testing import assert_allclose
 from .algebraic import fit_ellipse
 
 
-def find_disks(image):
-    return
+# def find_disks(image):
+#     return
 
 
 def find_ellipse(image, mode='ellipse_aligned', min_length=24):
