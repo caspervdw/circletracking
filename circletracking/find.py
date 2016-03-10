@@ -7,15 +7,28 @@ try:
 except ImportError:
     from skimage.filter import threshold_otsu  # skimage <= 0.10
 from skimage.measure import find_contours
-
+import pandas
 from numpy.testing import assert_allclose
 
 from .algebraic import fit_ellipse
+from .locate import locate_multiple_disks
+from .refine import refine_multiple
 
 
-# def find_disks(image):
-#     return
+def find_disks(image, size_range, number_of_disks=100):
+    """
+    Find circular particles in the image
+    :param size_range:
+    :rtype : pandas.DataFrame
+    :param n:
+    :return:
+    """
+    blobs = locate_multiple_disks(image, size_range, number_of_disks)
 
+    if blobs.empty:
+        return pandas.DataFrame(columns=['r', 'y', 'x', 'dev'])
+
+    return refine_multiple(image, blobs)
 
 def find_ellipse(image, mode='ellipse_aligned', min_length=24):
     """ Thresholds the image, finds the longest contour and fits an ellipse
@@ -26,7 +39,7 @@ def find_ellipse(image, mode='ellipse_aligned', min_length=24):
     image : 2D numpy array of numbers
     mode : {'ellipse', 'ellipse_aligned', 'circle'}
     min_length : number
-        minimum length of contour
+    minimum length of contour
 
     Returns
     -------
@@ -39,7 +52,7 @@ def find_ellipse(image, mode='ellipse_aligned', min_length=24):
     contours = find_contours(binary, 0.5, fully_connected='high')
     if len(contours) == 0:
         raise ValueError('No contours found')
-    
+
     # eliminate short contours
     contours = [c for c in contours if len(c) >= min_length]
 
@@ -74,8 +87,8 @@ def find_ellipsoid(image3d, center_atol=None):
     ----------
     image3d : 3D numpy array of numbers
     center_atol : float, optional
-        the maximum absolute tolerance for the difference between the found
-        centers, Default None
+    the maximum absolute tolerance for the difference between the found
+    centers, Default None
 
     Returns
     -------

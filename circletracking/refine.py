@@ -3,6 +3,9 @@ from __future__ import (absolute_import, division, print_function,
 import six
 import numpy as np
 from scipy.ndimage.interpolation import map_coordinates
+import scipy.ndimage
+import skimage.filters
+import pandas
 
 from numpy.testing import assert_allclose
 
@@ -18,19 +21,19 @@ def fit_max_2d(arr, maxfit_size=2, threshold=0.1):
     ----------
     arr : numpy array
     maxfit_size : integer, optional
-        defines the fitregion around the maximum value:
-        range(argmax - maxfit_size, argmax + maxfitsize + 1). Default 2.
+    defines the fitregion around the maximum value:
+    range(argmax - maxfit_size, argmax + maxfitsize + 1). Default 2.
     threshold :
-        discard points when the mean of the fitregion < threshold * global max
+    discard points when the mean of the fitregion < threshold * global max
 
     Returns
     -------
     1D array with locations of maxima.
     Elements are NaN in all of the following cases:
-     - any pixel in the fitregion is 0
-     - the mean of the fitregion < threshold * global max
-     - regression returned infinity
-     - maximum is outside of the fit region.
+    - any pixel in the fitregion is 0
+    - the mean of the fitregion < threshold * global max
+    - regression returned infinity
+    - maximum is outside of the fit region.
     """
     # identify the regions around the max value
     maxes = np.argmax(arr[:, maxfit_size:-maxfit_size],
@@ -58,34 +61,153 @@ def fit_max_2d(arr, maxfit_size=2, threshold=0.1):
     return r_dev + maxes
 
 
-# def fit_edge_2d(arr, threshold=None):
-#     pass
+def fit_edge_2d(image, params, rad_range, threshold=None,
+                num_points_circle=100):
+    """
+    Find a circle based on the blob
+    :rtype : pandas.DataFrame
+    :param blob:
+    :return:
+    """
+    yr, xr, yc, xc = params
+    if rad_range is None:
+        rad_range = (-min(yr, xr) / 2, min(yr, xr) / 2)
+
+    # Get intensity in spline representation
+    intensity, pos, normal = get_intensity_interpolation(image, params,
+                                                         rad_range,
+                                                         num_points_circle)
+
+    if not check_intensity_interpolation(intensity, threshold):
+        return None
+
+    # Find the coordinates of the edge
+    edge_coords = find_edge(intensity)
+
+    if np.isnan(edge_coords.x).any():
+        return None
+
+    # Set outliers to mean of rest of x coords
+    edge_coords = remove_outliers(edge_coords)
+
+    # Convert to cartesian
+    coord_new = mapped_coords_to_normal_coords(pos, r_dev, rad_range, normal)
+
+    # Fit the circle
+    radius, center, _ = fit_ellipse(coord_new, mode='xy')
+
+    return tuple(radius) + tuple(center), coord_new.T
+
+
+def find_edge(intensity):
+    """
+    Find the edge of the particle
+    :rtype : pandas.DataFrame
+    :param intensity:
+    :return:
+    """
+    mask = create_binary_mask(intensity)
+
+    # Take last x coord of left list, first x coord of right list and take y
+    coords = [(([i for i, l in enumerate(row) if l][-1]
+                + [j for j, r in enumerate(row) if not r][0]) / 2.0, y) for
+              y, row in enumerate(mask) if True in row and False in row]
+    coords_df = pandas.DataFrame(columns=['x', 'y'], data=coords)
+
+    # Set the index
+    coords_df = coords_df.set_index('y', drop=False, verify_integrity=False)
+
+    # Generate index of all y values of intensity array
+    index = np.arange(0, intensity.shape[0], 1)
+
+    # Reindex with all y values, filling with NaN's
+    coords_df = coords_df.reindex(index, fill_value=np.nan)
+
+    # Try to interpolate missing x values
+    coords_df = coords_df.interpolate(method='nearest', axis=0).ffill().bfill()
+
+    return coords_df
+
+def remove_outliers(edge_coords):
+    """
+
+    :param edge_coords:
+    :return:
+    """
+    mean = np.mean(edge_coords.x)
+    comparison = 0.2 * mean
+    mask_outlier = abs(edge_coords.x - mean) > comparison
+    mask_no_outlier = abs(edge_coords.x - mean) <= comparison
+    mean_no_outlier = np.mean(edge_coords[mask_no_outlier].x)
+    edge_coords.ix[mask_outlier, 'x'] = mean_no_outlier
+    return edge_coords
+
+def create_binary_mask(intensity, threshold=None):
+    # Create binary mask
+    if threshold is None:
+        threshold = skimage.filters.threshold_otsu(intensity)
+    mask = intensity > threshold
+
+    # Fill holes in binary mask
+    mask = scipy.ndimage.morphology.binary_fill_holes(mask)
+
+    return mask
+
+def check_intensity_interpolation(intensity, threshold=None):
+    """
+    Check whether the intensity interpolation is bright on left, dark on right
+    :rtype : bool
+    :param intensity:
+    :return:
+    """
+    binary_mask = create_binary_mask(intensity, threshold)
+    parts = np.array_split(binary_mask, 2, axis=1)
+    mean_left = np.mean(parts[0])
+    mean_right = np.mean(parts[1])
+    return mean_left > 0.8 and 0.2 > mean_right
+
+def get_intensity_interpolation(image, params, rad_range, num_points):
+    yr, xr, yc, xc = params
+    steps = np.arange(rad_range[0], rad_range[1] + 1, 1)
+    pos, normal = ellipse_grid((yr, xr), (yc, xc), n=num_points, spacing=1)
+    coords = normal[:, :, np.newaxis] * steps[np.newaxis, np.newaxis, :] + \
+        pos[:, :, np.newaxis]
+
+    # interpolate the image on calculated coordinates
+    intensity = map_coordinates(image, coords, order=spline_order)
+    return intensity, pos, normal
+
+def mapped_coords_to_normal_coords(pos, r_dev, rad_range, normal):
+    # calculate new coords
+    coord_new = pos + (r_dev + rad_range[0])*normal
+    coord_new = coord_new[:, np.isfinite(coord_new).all(0)]
+    return coord_new
 
 
 def refine_ellipse(image, params, mode='ellipse_aligned', n=None,
                    rad_range=None, maxfit_size=2, spline_order=3,
                    threshold=0.1):
-    """ Interpolates the image along lines perpendicular to the ellipse. 
+    """ Interpolates the image along lines perpendicular to the ellipse.
     The maximum along each line is found using linear regression of the
     descrete derivative.
 
     Parameters
     ----------
     image : 2d numpy array of numbers
-        Image indices are interpreted as (y, x)
+    Image indices are interpreted as (y, x)
     params : yr, xr, yc, xc
     mode : {'ellipse', 'ellipse_aligned', 'circle'}
     n: integer
-        number of points on the ellipse that are used for refine
+    number of points on the ellipse that are used for refine
     rad_range: tuple of floats
-        length of the line (distance inwards, distance outwards)
+    length of the line (distance inwards, distance outwards)
     maxfit_size: integer
-        pixels around maximum pixel that will be used in linear regression
+    pixels around maximum pixel that will be used in linear regression
     spline_order: integer
-        interpolation order for edge crossections
+    interpolation order for edge crossections
     threshold: float
-        a threshold is calculated based on the global maximum
-        fitregions are rejected if their average value is lower than this
+    a threshold is calculated based on the global maximum
+    fitregions are rejected if their average value is lower than this
 
     Returns
     -------
@@ -98,20 +220,14 @@ def refine_ellipse(image, params, mode='ellipse_aligned', n=None,
     yr, xr, yc, xc = params
     if rad_range is None:
         rad_range = (-min(yr, xr) / 2, min(yr, xr) / 2)
-    steps = np.arange(rad_range[0], rad_range[1] + 1, 1)
-    pos, normal = ellipse_grid((yr, xr), (yc, xc), n=n, spacing=1)
-    coords = normal[:, :, np.newaxis] * steps[np.newaxis, np.newaxis, :] + \
-             pos[:, :, np.newaxis]
 
     # interpolate the image on calculated coordinates
-    intensity = map_coordinates(image, coords, order=spline_order)
+    intensity, pos, normal = get_intensity_interpolation(image, params,
+                                                         rad_range, n)
 
     # identify the regions around the max value
     r_dev = fit_max_2d(intensity, maxfit_size, threshold)
-
-    # calculate new coords
-    coord_new = pos + (r_dev + rad_range[0])*normal
-    coord_new = coord_new[:, np.isfinite(coord_new).all(0)]
+    coord_new = mapped_coords_to_normal_coords(pos, r_dev, rad_range, normal)
 
     # fit ellipse
     radius, center, _ = fit_ellipse(coord_new, mode=mode)
@@ -128,29 +244,29 @@ def refine_ellipsoid_fast(image3d, p, n_xy=None, n_xz=None, rad_range=None,
     ----------
     image3d : 3D numpy array
     p: tuple of floats
-        (zr, yr, xr, zc, yr, xr) coordinates of ellipsoid center
+    (zr, yr, xr, zc, yr, xr) coordinates of ellipsoid center
     n_xy: integer
-        number of points on the ellipse that are used for refine in xy plane
+    number of points on the ellipse that are used for refine in xy plane
     n_xz: integer
-        number of points on the ellipse that are used for refine in xz plane
+    number of points on the ellipse that are used for refine in xz plane
     rad_range: tuple of floats
-        length of the line (distance inwards, distance outwards)
+    length of the line (distance inwards, distance outwards)
     maxfit_size: integer
-        pixels around maximum pixel that will be used in linear regression
+    pixels around maximum pixel that will be used in linear regression
     spline_order: integer
-        interpolation order for edge crossections
+    interpolation order for edge crossections
     threshold: float
-        a threshold is calculated based on the global maximum
-        fitregions are rejected if their average value is lower than this
+    a threshold is calculated based on the global maximum
+    fitregions are rejected if their average value is lower than this
     radius_rtol : float, optional
-        the maximum relative tolerance for the difference between initial
-        and refined radii, Default 0.5
+    the maximum relative tolerance for the difference between initial
+    and refined radii, Default 0.5
     radius_atol : float, optional
-        the maximum absolute tolerance for the difference between initial
-        and refined radii, Default 30.
+    the maximum absolute tolerance for the difference between initial
+    and refined radii, Default 30.
     center_atol : float, optional
-        the maximum absolute tolerance for the difference between initial
-        and refined radii, Default 30.
+    the maximum absolute tolerance for the difference between initial
+    and refined radii, Default 30.
 
     Returns
     -------
@@ -160,7 +276,7 @@ def refine_ellipsoid_fast(image3d, p, n_xy=None, n_xz=None, rad_range=None,
     zr0, yr0, xr0, zc0, yc0, xc0 = p
     # refine X, Y radius and center on XY middle
     middle_slice = image3d[int(zc0)] * (1 - zc0 % 1) + \
-                   image3d[int(zc0) + 1] * (zc0 % 1)
+        image3d[int(zc0) + 1] * (zc0 % 1)
 
     (yr, xr, yc, xc), r = refine_ellipse(middle_slice, (yr0, xr0, yc0, xc0),
                                          'ellipse_aligned', n_xy, rad_range,
@@ -168,7 +284,7 @@ def refine_ellipsoid_fast(image3d, p, n_xy=None, n_xz=None, rad_range=None,
 
     # refine Z radius and center on ZX middle (not ZY, is blurred by resonant)
     middle_slice = image3d[:, int(yc0)] * (1 - yc0 % 1) + \
-                   image3d[:, int(yc0) + 1] * (yc0 % 1)
+        image3d[:, int(yc0) + 1] * (yc0 % 1)
 
     (zr, _, zc, _), _ = refine_ellipse(middle_slice, (zr0, xr0, zc0, xc0),
                                        'ellipse_aligned', n_xz, rad_range,
@@ -178,7 +294,7 @@ def refine_ellipsoid_fast(image3d, p, n_xy=None, n_xz=None, rad_range=None,
     assert_allclose([xr, yr, zr],
                     [xr0, yr0, zr0], radius_rtol, radius_atol,
                     err_msg='Refined value differs extremely from initial value.')
-                    
+
     assert_allclose([xc, yc, zc],
                     [xc0, yc0, zc0], rtol=0, atol=center_atol,
                     err_msg='Refined value differs extremely from initial value.')
@@ -197,20 +313,20 @@ def refine_ellipsoid(image3d, params, spacing=1, rad_range=None, maxfit_size=2,
     Parameters
     ----------
     image3d : 3d numpy array of numbers
-        Image indices are interpreted as (z, y, x)
+    Image indices are interpreted as (z, y, x)
     params : tuple
-        zr, yr, xr, zc, yc, xc
+    zr, yr, xr, zc, yc, xc
     spacing: number
-        spacing along radial direction
+    spacing along radial direction
     rad_range: tuple of floats
-        length of the line (distance inwards, distance outwards)
+    length of the line (distance inwards, distance outwards)
     maxfit_size: integer
-        pixels around maximum pixel that will be used in linear regression
+    pixels around maximum pixel that will be used in linear regression
     spline_order: integer
-        interpolation order for edge crossections
+    interpolation order for edge crossections
     threshold: float
-        a threshold is calculated based on the global maximum
-        fitregions are rejected if their average value is lower than this
+    a threshold is calculated based on the global maximum
+    fitregions are rejected if their average value is lower than this
 
     Returns
     -------
@@ -227,7 +343,7 @@ def refine_ellipsoid(image3d, params, spacing=1, rad_range=None, maxfit_size=2,
     steps = np.arange(rad_range[0], rad_range[1] + 1, 1)
     pos, normal = ellipsoid_grid((zr, yr, xr), (zc, yc, xc), spacing=spacing)
     coords = normal[:, :, np.newaxis] * steps[np.newaxis, np.newaxis, :] + \
-             pos[:, :, np.newaxis]
+        pos[:, :, np.newaxis]
 
     # interpolate the image on calculated coordinates
     intensity = map_coordinates(image3d, coords, order=spline_order)
@@ -244,7 +360,9 @@ def refine_ellipsoid(image3d, params, spacing=1, rad_range=None, maxfit_size=2,
                                          return_mode='skew')
     return tuple(radius) + tuple(center) + tuple(skew), coord_new.T
 
-# def refine_multiple(image, params, **kwargs):
-#     fit = pandas.DataFrame(columns=['r', 'y', 'x', 'dev'])
-#     for i, blob in blobs.iterrows():
-#         fit = pandas.concat([fit, find_ellipse(image, blob, **kwargs)], ignore_index=True)
+def refine_multiple(image, blobs, **kwargs):
+    fit = pandas.DataFrame(columns=['r', 'y', 'x', 'dev'])
+    for i, blob in blobs.iterrows():
+        fit = pandas.concat([fit, fit_edge_2d(image, blob, **kwargs)],
+                            ignore_index=True)
+    return fit
