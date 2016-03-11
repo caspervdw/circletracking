@@ -4,7 +4,7 @@ import six
 import numpy as np
 import skimage
 import scipy.spatial
-import pd as pd
+import pandas as pd
 from .find import find_ellipse, find_ellipsoid
 from .refine import (refine_ellipse, refine_ellipsoid, refine_ellipsoid_fast)
 
@@ -163,7 +163,7 @@ def locate_multiple_disks(image, size_range, number_of_disks=100):
                                             'y': peaks[:, 0],
                                             'x': peaks[:, 1],
                                             'accum': accumulator})
-                         ], ignore_index=True)
+                        ], ignore_index=True)
 
         fit = merge_hough_same_values(fit, number_of_disks)
 

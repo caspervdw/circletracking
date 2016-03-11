@@ -2,13 +2,13 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 import six
 import numpy as np
+from numpy.testing import assert_allclose
 try:
     from skimage.filters import threshold_otsu
 except ImportError:
     from skimage.filter import threshold_otsu  # skimage <= 0.10
 from skimage.measure import find_contours
 import pandas
-from numpy.testing import assert_allclose
 
 from .algebraic import fit_ellipse
 from .locate import locate_multiple_disks
@@ -28,7 +28,8 @@ def find_disks(image, size_range, number_of_disks=100):
     if blobs.empty:
         return pandas.DataFrame(columns=['r', 'y', 'x', 'dev'])
 
-    return refine_multiple(image, blobs)
+    return refine_multiple(image, blobs, size_range,
+                           num_points_circle=number_of_disks)
 
 def find_ellipse(image, mode='ellipse_aligned', min_length=24):
     """ Thresholds the image, finds the longest contour and fits an ellipse
