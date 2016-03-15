@@ -1,3 +1,4 @@
+""" Nosetests for finding features """
 from __future__ import (division, unicode_literals)
 
 import unittest
@@ -296,6 +297,9 @@ class TestEllipsoid(unittest.TestCase):
 
 
 class TestCircles(unittest.TestCase):
+    """
+    Test case for finding circular disks
+    """
     def setUp(self):
         """
         Setup test image
@@ -331,8 +335,16 @@ class TestCircles(unittest.TestCase):
         return coords_df
 
     @staticmethod
-    def find_closest_index(expected_row, actual_df, intersection, column1,
-                           column2, tolerance=5.0):
+    def find_closest_index(expected_row, actual_df, intersection, columns,
+                           tolerance=5.0):
+        """
+        Find the row in the dataframe that has the closest resemblence to the
+        expected row.
+        """
+        if len(columns) != 2:
+            return False
+        column1, column2 = columns
+
         diffs = {i: abs(expected_row[column1] - actual_df.loc[i][column1])
                     + abs(expected_row[column2] - actual_df.loc[i][column2])
                  for i in intersection}
@@ -344,8 +356,15 @@ class TestCircles(unittest.TestCase):
         else:
             return False
 
-    def find_intersections(self, expected_row, actual_df, closest_dict, column1,
-                           column2, tolerance=5.0):
+    def find_intersections(self, expected_row, actual_df, closest_dict, columns,
+                           tolerance=5.0):
+        """
+        Find intersections between the expected and actual rows.
+        """
+        if len(columns) != 2:
+            return False
+        column1, column2 = columns
+
         intersection = list(set(closest_dict[column1]).intersection(
             closest_dict[column2]))
 
@@ -353,15 +372,17 @@ class TestCircles(unittest.TestCase):
             return False
         else:
             return self.find_closest_index(expected_row, actual_df,
-                                           intersection, column1,
-                                           column2, tolerance)
+                                           intersection, columns, tolerance)
 
-    def find_closest_row_index(self, expected_row, actual_df, column1, column2,
+    def find_closest_row_index(self, expected_row, actual_df, columns,
                                tolerance=5.0):
+        """
+        Find the index of the row closest to expected_row
+        """
         closest = {c: (actual_df[c] - expected_row[c]).abs().argsort()[:10]
-                   for c in [column1, column2]}
+                   for c in columns}
         return self.find_intersections(expected_row, actual_df, closest,
-                                       column1, column2, tolerance)
+                                       columns, tolerance)
 
     def check_frames_difference(self, actual, expected, sizecol='r'):
         """
@@ -386,8 +407,9 @@ class TestCircles(unittest.TestCase):
         for _, exp_row in expected.iterrows():
             # tolerance in pixels
             tolerance = max(exp_row[sizecol] * 0.1, 5.0)
-            act_row_index = self.find_closest_row_index(exp_row, actual, 'x',
-                                                        'y', tolerance)
+            act_row_index = self.find_closest_row_index(exp_row, actual,
+                                                        (u'x', u'y'),
+                                                        tolerance)
             if act_row_index is False:
                 unmatched += 1
                 continue
@@ -406,8 +428,6 @@ class TestCircles(unittest.TestCase):
         fits = find_disks(generated_image, (self.radius / 2.0,
                                             self.radius * 2.0),
                           number_of_disks=self.number)
-
-        fits.drop(['dev'], axis=1, inplace=True)
 
         coords_df = self.get_coords_dataframe(True)
 

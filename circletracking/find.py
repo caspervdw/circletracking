@@ -1,3 +1,4 @@
+""" Find features in image """
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 import six
@@ -8,8 +9,13 @@ try:
     from skimage.filters import threshold_otsu
 except ImportError:
     from skimage.filter import threshold_otsu  # skimage <= 0.10
+try:
+    from skimage.feature import canny
+except ImportError:
+    from skimage.filter import canny  # skimage <= 0.10
 from skimage.measure import find_contours
 import pandas
+import scipy
 
 from .algebraic import fit_ellipse
 
@@ -25,7 +31,7 @@ def find_disks(image, size_range, number_of_disks=100):
                         dtype=np.float)
 
     # Find edges
-    edges = skimage.feature.canny(image)
+    edges = canny(image)
     circles = skimage.transform.hough_circle(edges, radii)
 
     fit = pandas.DataFrame(columns=['r', 'y', 'x', 'accum'])
@@ -33,7 +39,7 @@ def find_disks(image, size_range, number_of_disks=100):
         peaks = skimage.feature.peak_local_max(hough_circle, threshold_rel=0.5,
                                                num_peaks=number_of_disks)
         accumulator = hough_circle[peaks[:, 0], peaks[:, 1]]
-        fit = pandas.concat([fit, pandas.DataFrame(data={'r': [radius] * peaks.shape[0], 'y': peaks[:, 0], 'x': peaks[:, 1], 'accum': accumulator}) ], ignore_index=True)
+        fit = pandas.concat([fit, pandas.DataFrame(data={'r': [radius] * peaks.shape[0], 'y': peaks[:, 0], 'x': peaks[:, 1], 'accum': accumulator})], ignore_index=True)
 
         fit = merge_hough_same_values(fit, number_of_disks)
 

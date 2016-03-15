@@ -1,3 +1,4 @@
+"""Refinement steps for refining the 'crude' fits """
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 import six
@@ -5,7 +6,10 @@ import numpy as np
 from numpy.testing import assert_allclose
 from scipy.ndimage.interpolation import map_coordinates
 import scipy.ndimage
-import skimage.filters
+try:
+    from skimage.filters import threshold_otsu
+except ImportError:
+    from skimage.filter import threshold_otsu  # skimage <= 0.10
 import pandas
 
 from .algebraic import (ellipse_grid, ellipsoid_grid, fit_ellipse,
@@ -43,7 +47,8 @@ def fit_max_2d(arr, maxfit_size=2, threshold=0.1):
 
     # fit max using linear regression
     intdiff = np.diff(fitregion, 1)
-    x_norm = np.arange(-maxfit_size + 0.5, maxfit_size + 0.5) # is normed because symmetric, x_mean = 0
+    # is normed because symmetric, x_mean = 0
+    x_norm = np.arange(-maxfit_size + 0.5, maxfit_size + 0.5)
     y_mean = np.mean(intdiff, axis=1, keepdims=True)
     y_norm = intdiff - y_mean
     slope = np.sum(x_norm[np.newaxis, :] * y_norm, 1) / np.sum(x_norm * x_norm)
@@ -59,13 +64,14 @@ def fit_max_2d(arr, maxfit_size=2, threshold=0.1):
     r_dev[~valid] = np.nan
     return r_dev + maxes
 
-def refine_multiple(image, blobs, **kwargs):
+def refine_multiple(image, blobs, size_range, num_points_circle=100):
     """
     Refine multiple Hough detected blobs
     """
     fit = pandas.DataFrame(columns=['r', 'y', 'x', 'dev'])
     for _, blob in blobs.iterrows():
-        fit = pandas.concat([fit, fit_edge_2d(image, blob, **kwargs)],
+        fit = pandas.concat([fit, fit_edge_2d(image, blob, size_range,
+                                              num_points_circle)],
                             ignore_index=True)
     return fit
 
@@ -92,11 +98,11 @@ def fit_edge_2d(image, params, rad_range, threshold=None,
     # Find the coordinates of the edge
     r_dev = find_edge(intensity)
 
-    if np.isnan(edge_coords.x).any():
+    if np.isnan(r_dev).any():
         return None
 
     # Set outliers to mean of rest of x coords
-    r_dev = remove_outliers(edge_coords)
+    r_dev = remove_outliers(r_dev)
 
     # Convert to cartesian
     coord_new = mapped_coords_to_normal_coords(pos, r_dev, rad_range, normal)
@@ -155,9 +161,14 @@ def remove_outliers(edge_coords):
     return edge_coords.x.values
 
 def create_binary_mask(intensity, threshold=None):
+    """
+    :param intensity:
+    :param threshold:
+    :return binary_mask:
+    """
     # Create binary mask
     if threshold is None:
-        threshold = skimage.filters.threshold_otsu(intensity)
+        threshold = threshold_otsu(intensity)
     mask = intensity > threshold
 
     # Fill holes in binary mask
@@ -178,7 +189,8 @@ def check_intensity_interpolation(intensity, threshold=None):
     mean_right = np.mean(parts[1])
     return mean_left > 0.8 and mean_right < 0.2
 
-def get_intensity_interpolation(image, params, rad_range, num_points):
+def get_intensity_interpolation(image, params, rad_range, num_points,
+                                spline_order=3):
     """
     Generate the intensity interpolation used for edge finding
     """

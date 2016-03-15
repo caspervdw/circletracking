@@ -1,11 +1,10 @@
+""" Locate features in images: combine find and refine steps """
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 import six
 import numpy as np
-import skimage
-import scipy.spatial
 import pandas as pd
-from .find import find_ellipse, find_ellipsoid
+from .find import find_ellipse, find_ellipsoid, find_disks
 from .refine import (refine_ellipse, refine_ellipsoid,
                      refine_ellipsoid_fast, refine_multiple)
 
@@ -150,7 +149,7 @@ def locate_multiple_disks(image, size_range, number_of_disks=100):
     blobs = find_disks(image, size_range, number_of_disks)
 
     if blobs.empty:
-        return pandas.DataFrame(columns=['r', 'y', 'x', 'dev'])
+        return pd.DataFrame(columns=['r', 'y', 'x', 'dev'])
 
     return refine_multiple(image, blobs, size_range,
                            num_points_circle=number_of_disks)
