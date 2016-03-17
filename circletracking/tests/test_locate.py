@@ -304,144 +304,56 @@ class TestCircles(unittest.TestCase):
         """
         Setup test image
         """
-        self.number = 100
-        self.radius = 15.0
-        self.image = self.generate_image()
+        self.number = 10
+        self.radii = [15.0, 20.0, 25.0]
 
-    def generate_image(self):
+    def generate_image(self, radius):
         """
         Generate the test image
 
         :rtype : semtracking.SimulatedImage
         :return:
         """
-        image = SimulatedImage(shape=(1024, 943), radius=self.radius,
-                               noise=0.3)
-        image.draw_features(self.number, separation=3 * self.radius)
+        image = SimulatedImage(shape=(300, 300), radius=radius,
+                               noise=0.2)
+        image.draw_features(1)
         return image
 
-    def get_coords_dataframe(self, add_r=False):
+    def get_coords(self, generated_image):
         """
-        Get a dataframe with the generated coordinates
-        :rtype : pandas.DataFrame
+        Get x, y coords
         """
-        coords = self.image.coords
-        coords_df = pandas.DataFrame(data=coords, columns=['y', 'x'])
-
-        # Add r
-        if add_r:
-            coords_df['r'] = pandas.Series(self.radius, index=coords_df.index)
-
-        return coords_df
-
-    @staticmethod
-    def find_closest_index(expected_row, actual_df, intersection, columns,
-                           tolerance=5.0):
-        """
-        Find the row in the dataframe that has the closest resemblence to the
-        expected row.
-        """
-        if len(columns) != 2:
-            return False
-        column1, column2 = columns
-
-        diffs = {i: abs(expected_row[column1] - actual_df.loc[i][column1])
-                    + abs(expected_row[column2] - actual_df.loc[i][column2])
-                 for i in intersection}
-
-        key = min(diffs, key=diffs.get)
-
-        if diffs[key] / 2.0 < tolerance:
-            return key
+        if len(generated_image.coords) == 1:
+            y, x = generated_image.coords[0]
         else:
-            return False
+            y, x = (0, 0)
 
-    def find_intersections(self, expected_row, actual_df, closest_dict, columns,
-                           tolerance=5.0):
-        """
-        Find intersections between the expected and actual rows.
-        """
-        if len(columns) != 2:
-            return False
-        column1, column2 = columns
-
-        intersection = list(set(closest_dict[column1]).intersection(
-            closest_dict[column2]))
-
-        if len(intersection) == 0:
-            return False
-        else:
-            return self.find_closest_index(expected_row, actual_df,
-                                           intersection, columns, tolerance)
-
-    def find_closest_row_index(self, expected_row, actual_df, columns,
-                               tolerance=5.0):
-        """
-        Find the index of the row closest to expected_row
-        """
-        closest = {c: (actual_df[c] - expected_row[c]).abs().argsort()[:10]
-                   for c in columns}
-        return self.find_intersections(expected_row, actual_df, closest,
-                                       columns, tolerance)
-
-    def check_frames_difference(self, actual, expected, sizecol='r'):
-        """
-        Compare DataFrame items by index and column and
-        raise AssertionError if any item is not equal.
-
-        Ordering is unimportant, items are compared only by label.
-        NaN and infinite values are supported.
-
-        Parameters
-        ----------
-        actual : pandas.DataFrame
-        expected : pandas.DataFrame
-        use_close : bool, optional
-            If True, use numpy.testing.assert_allclose instead of
-            numpy.testing.assert_equal.
-
-        """
-        unmatched = 0
-        value_diff = pandas.DataFrame(columns=expected.columns)
-
-        for _, exp_row in expected.iterrows():
-            # tolerance in pixels
-            tolerance = max(exp_row[sizecol] * 0.1, 5.0)
-            act_row_index = self.find_closest_row_index(exp_row, actual,
-                                                        (u'x', u'y'),
-                                                        tolerance)
-            if act_row_index is False:
-                unmatched += 1
-                continue
-
-            act_row = actual.loc[act_row_index]
-            diff = exp_row - act_row[expected.columns]
-            value_diff = value_diff.append(diff, ignore_index=True)
-        return unmatched, value_diff
+        return x, y
 
     def test_locate_particles(self):
         """
         Test locating particles
         """
-        generated_image = self.image()
+        for _ in range(self.number):
+            for radius in self.radii:
+                generated_image = self.generate_image(radius)
 
-        fits = find_disks(generated_image, (self.radius / 2.0,
-                                            self.radius * 2.0),
-                          number_of_disks=self.number)
+                fits = find_disks(generated_image.image, (radius / 2.0,
+                                                          radius * 2.0),
+                                  number_of_disks=5)
 
-        coords_df = self.get_coords_dataframe(True)
+                x_coord, y_coord = self.get_coords(generated_image)
+                NOISY_CENTER_ATOL = 0.8
+                NOISY_RADIUS_RTOL = 0.03
 
-        unmatched, value_diff = self.check_frames_difference(fits, coords_df)
-
-        assert_allclose(value_diff['r'], np.zeros_like(value_diff['r']),
-                        atol=0.03*self.radius, err_msg='Radius not accurate.')
-        assert_allclose(value_diff['x'], np.zeros_like(value_diff['x']),
-                        atol=1, err_msg='X not accurate.')
-        assert_allclose(value_diff['y'], np.zeros_like(value_diff['y']),
-                        atol=1, err_msg='Y not accurate.')
-        assert_equal(unmatched, 0, 'Not all particles found, %d unmatched'
-                     % unmatched)
-
+                assert_equal(len(fits), 1, 'Particle number mismatch')
+                assert_allclose(fits['r'], np.ones_like(fits['r'])*radius,
+                                rtol=NOISY_RADIUS_RTOL,
+                                err_msg='Radius mismatch')
+                assert_allclose(fits['x'], np.ones_like(fits['x'])*x_coord,
+                                atol=NOISY_CENTER_ATOL, err_msg='X mismatch')
+                assert_allclose(fits['y'], np.ones_like(fits['y'])*y_coord,
+                                atol=NOISY_CENTER_ATOL, err_msg='Y mismatch')
 
 if __name__ == '__main__':
     nose.runmodule(argv=[__file__, '-vvs', '-x'], exit=False)

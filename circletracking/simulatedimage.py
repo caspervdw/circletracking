@@ -121,4 +121,7 @@ class SimulatedImage(object):
         Margin may be tuple-valued.
         """
         positions = self.gen_random_locations(shape, count, margin)
-        return tp.artificial.eliminate_overlapping_locations(positions, separation)
+        if len(positions) > 1:
+            return tp.artificial.eliminate_overlapping_locations(positions, separation)
+        else:
+            return positions

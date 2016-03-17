@@ -41,9 +41,9 @@ def find_disks(image, size_range, number_of_disks=100):
         accumulator = hough_circle[peaks[:, 0], peaks[:, 1]]
         fit = pandas.concat([fit, pandas.DataFrame(data={'r': [radius] * peaks.shape[0], 'y': peaks[:, 0], 'x': peaks[:, 1], 'accum': accumulator})], ignore_index=True)
 
-        fit = merge_hough_same_values(fit, number_of_disks)
+    fit = merge_hough_same_values(fit, number_of_disks)
 
-        return fit
+    return fit
 
 def find_ellipse(image, mode='ellipse_aligned', min_length=24):
     """ Thresholds the image, finds the longest contour and fits an ellipse
