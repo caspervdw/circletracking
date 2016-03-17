@@ -340,11 +340,11 @@ class TestCircles(unittest.TestCase):
 
                 fits = find_disks(generated_image.image, (radius / 2.0,
                                                           radius * 2.0),
-                                  number_of_disks=5)
+                                  number_of_disks=1)
 
                 x_coord, y_coord = self.get_coords(generated_image)
                 NOISY_CENTER_ATOL = 0.8
-                NOISY_RADIUS_RTOL = 0.03
+                NOISY_RADIUS_RTOL = 0.05
 
                 assert_equal(len(fits), 1, 'Particle number mismatch')
                 assert_allclose(fits['r'], np.ones_like(fits['r'])*radius,
