@@ -328,46 +328,45 @@ class TestCircles(unittest.TestCase):
                                   number_of_disks=1)
 
                 y_coord, x_coord = generated_image.coords[0]
-                NOISY_CENTER_ATOL = 0.8
-                NOISY_RADIUS_RTOL = 0.05
-
+                NOISY_CENTER_ATOL = 1.
+                NOISY_RADIUS_RTOL = 0.1
+                r, x, y = fits[['r', 'x', 'y']].values.astype(np.float64).T
                 assert_equal(len(fits), 1, 'Particle number mismatch')
-                assert_allclose(fits['r'], np.ones_like(fits['r'])*radius,
+                assert_allclose(r, radius,
                                 rtol=NOISY_RADIUS_RTOL,
                                 err_msg='Radius mismatch')
-                assert_allclose(fits['x'], np.ones_like(fits['x'])*x_coord,
+                assert_allclose(x, x_coord,
                                 atol=NOISY_CENTER_ATOL, err_msg='X mismatch')
-                assert_allclose(fits['y'], np.ones_like(fits['y'])*y_coord,
+                assert_allclose(y, y_coord,
                                 atol=NOISY_CENTER_ATOL, err_msg='Y mismatch')
 
     def test_locate_multiple(self):
         """ Test locating particles """
         for radius in self.radii:
             generated_image = self.generate_image(radius, self.number)
-
+            actual_number = len(generated_image.coords)
             fits = find_disks(generated_image.image, (radius / 2.0,
                                                       radius * 2.0),
-                              number_of_disks=len(generated_image.coords))
+                              number_of_disks=actual_number)
 
-            NOISY_CENTER_ATOL = 0.8
-            NOISY_RADIUS_RTOL = 0.05
+            NOISY_CENTER_ATOL = 1.
+            NOISY_RADIUS_RTOL = 0.1
 
             _, coords = sort_positions(generated_image.coords,
                                        np.array([fits['y'].values,
                                                  fits['x'].values]).T)
 
 
-            assert_equal(len(fits), len(generated_image.coords),
+            assert_equal(len(fits), actual_number,
                          'Particle number mismatch')
-            assert_allclose(fits['r'].values.astype(np.float64),
-                            np.ones_like(fits['r'])*radius,
+            r, x, y = fits[['r', 'x', 'y']].values.astype(np.float64).T
+
+            assert_allclose(r, np.full(actual_number, radius, np.float64),
                             rtol=NOISY_RADIUS_RTOL,
                             err_msg='Radius mismatch')
-            assert_allclose(fits['x'].values.astype(np.float64),
-                            np.ones_like(fits['x'])*coords[:, 1],
+            assert_allclose(x, coords[:, 1],
                             atol=NOISY_CENTER_ATOL, err_msg='X mismatch')
-            assert_allclose(fits['y'].values.astype(np.float64),
-                            np.ones_like(fits['y'])*coords[:, 0],
+            assert_allclose(y, coords[:, 0],
                             atol=NOISY_CENTER_ATOL, err_msg='Y mismatch')
 
 if __name__ == '__main__':
