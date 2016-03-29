@@ -22,9 +22,10 @@ from .algebraic import fit_ellipse
 def find_disks(image, size_range, number_of_disks=100):
     """ Locate blobs in the image by using a Laplacian of Gaussian method """
     number_of_disks = int(np.round(number_of_disks))
-    radii = np.linspace(size_range[0], size_range[1],
-                        num=min(abs(size_range[0] - size_range[1]) * 2.0, 30))
-    radii = radii.astype(np.float)
+
+    # Take a maximum of 30 intermediate steps
+    step = max(int(round(abs(size_range[1] - size_range[0]) / 30)), 1)
+    radii = np.arange(size_range[0], size_range[1], step=step, dtype=np.intp)
 
     # Find edges
     edges = canny(image)
