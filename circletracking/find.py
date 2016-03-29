@@ -14,8 +14,10 @@ try:
 except ImportError:
     from skimage.filter import canny  # skimage <= 0.10
 from skimage.measure import find_contours
-import pandas
-import scipy
+from skimage.transform import hough_circle
+from skimage.feature import peak_local_max
+import pandas as pd
+from scipy.spatial import cKDTree
 
 from .algebraic import fit_ellipse
 
@@ -29,18 +31,21 @@ def find_disks(image, size_range, number_of_disks=100):
 
     # Find edges
     edges = canny(image)
-    circles = skimage.transform.hough_circle(edges, radii)
+    circles = hough_circle(edges, radii)
 
-    fit = pandas.DataFrame(columns=['r', 'y', 'x', 'accum'])
-    for radius, hough_circle in zip(radii, circles):
-        peaks = skimage.feature.peak_local_max(hough_circle, threshold_rel=0.5,
-                                               num_peaks=number_of_disks)
-        accumulator = hough_circle[peaks[:, 0], peaks[:, 1]]
-        fit = pandas.concat([fit, pandas.DataFrame(data={'r': [radius] * peaks.shape[0], 'y': peaks[:, 0], 'x': peaks[:, 1], 'accum': accumulator})], ignore_index=True)
-
+    fit = []
+    for radius, circle in zip(radii, circles):
+        peaks = peak_local_max(circle, threshold_rel=0.5,
+                               num_peaks=number_of_disks)
+        accumulator = circle[peaks[:, 0], peaks[:, 1]]
+        fit.append(pd.DataFrame(dict(r=[radius] * peaks.shape[0],
+                                     y=peaks[:, 0],
+                                     x=peaks[:, 1],
+                                     accum=accumulator)))
+    fit = pd.concat(fit, ignore_index=True)
     fit = merge_hough_same_values(fit, number_of_disks)
-
     return fit
+
 
 def find_ellipse(image, mode='ellipse_aligned', min_length=24):
     """ Thresholds the image, finds the longest contour and fits an ellipse
@@ -134,7 +139,7 @@ def merge_hough_same_values(data, number_to_keep=100):
         # of 1. Do so every iteration (room for improvement?)
         positions = data[['x', 'y']].values
         mass = data['accum'].values
-        duplicates = scipy.spatial.cKDTree(positions, 30).query_pairs(
+        duplicates = cKDTree(positions, 30).query_pairs(
             np.mean(data['r']), p=2.0, eps=0.1)
         if len(duplicates) == 0:
             break

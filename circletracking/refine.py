@@ -64,6 +64,7 @@ def fit_max_2d(arr, maxfit_size=2, threshold=0.1):
     r_dev[~valid] = np.nan
     return r_dev + maxes
 
+
 def refine_multiple(image, blobs, size_range, num_points_circle=100):
     """ Refine multiple Hough detected blobs """
     fit = pandas.DataFrame(columns=['r', 'y', 'x', 'dev'])
@@ -72,6 +73,7 @@ def refine_multiple(image, blobs, size_range, num_points_circle=100):
                                               num_points_circle)],
                             ignore_index=True)
     return fit
+
 
 def fit_edge_2d(image, params, rad_range, threshold=None,
                 num_points_circle=100):
@@ -133,6 +135,7 @@ def find_edge(intensity):
 
     return r_dev.values
 
+
 def remove_outliers(edge_coords):
     edge_coords = pandas.DataFrame(edge_coords, columns=['x'])
     mean = np.mean(edge_coords.x)
@@ -142,6 +145,7 @@ def remove_outliers(edge_coords):
     mean_no_outlier = np.mean(edge_coords[mask_no_outlier].x)
     edge_coords.ix[mask_outlier, 'x'] = mean_no_outlier
     return edge_coords.x.values
+
 
 def create_binary_mask(intensity, threshold=None):
     if threshold is None:
@@ -153,6 +157,7 @@ def create_binary_mask(intensity, threshold=None):
 
     return mask
 
+
 def check_intensity_interpolation(intensity, threshold=None):
     """ Check whether the intensity interpolation is bright on left, dark on right """
     binary_mask = create_binary_mask(intensity, threshold)
@@ -160,6 +165,7 @@ def check_intensity_interpolation(intensity, threshold=None):
     mean_left = np.mean(parts[0])
     mean_right = np.mean(parts[1])
     return mean_left > 0.8 and mean_right < 0.2
+
 
 def get_intensity_interpolation(image, params, rad_range, num_points,
                                 spline_order=3):
@@ -173,6 +179,7 @@ def get_intensity_interpolation(image, params, rad_range, num_points,
     # interpolate the image on calculated coordinates
     intensity = map_coordinates(image, coords, order=spline_order)
     return intensity, pos, normal
+
 
 def mapped_coords_to_normal_coords(pos, r_dev, rad_range, normal):
     """ Generate the intensity interpolation used for edge finding """
@@ -357,4 +364,3 @@ def refine_ellipsoid(image3d, params, spacing=1, rad_range=None, maxfit_size=2,
     radius, center, skew = fit_ellipsoid(coord_new, mode='xy',
                                          return_mode='skew')
     return tuple(radius) + tuple(center) + tuple(skew), coord_new.T
-
