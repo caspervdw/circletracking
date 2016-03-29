@@ -152,7 +152,11 @@ def merge_hough_same_values(data, number_to_keep=100):
         data.drop(to_drop, inplace=True)
 
     # Keep only brightest n circles
-    data = data.sort_values(by=['accum'], ascending=False)
+    try:
+        data = data.sort_values(by=['accum'], ascending=False)
+    except AttributeError:
+        data = data.sort(columns=['accum'], ascending=False)
+
     data = data.head(number_to_keep)
 
     return data
