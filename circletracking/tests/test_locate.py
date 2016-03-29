@@ -359,12 +359,15 @@ class TestCircles(unittest.TestCase):
 
             assert_equal(len(fits), len(generated_image.coords),
                          'Particle number mismatch')
-            assert_allclose(fits['r'], np.ones_like(fits['r'])*radius,
+            assert_allclose(fits['r'].values.astype(np.float64),
+                            np.ones_like(fits['r'])*radius,
                             rtol=NOISY_RADIUS_RTOL,
                             err_msg='Radius mismatch')
-            assert_allclose(fits['x'], np.ones_like(fits['x'])*coords[:, 1],
+            assert_allclose(fits['x'].values.astype(np.float64),
+                            np.ones_like(fits['x'])*coords[:, 1],
                             atol=NOISY_CENTER_ATOL, err_msg='X mismatch')
-            assert_allclose(fits['y'], np.ones_like(fits['y'])*coords[:, 0],
+            assert_allclose(fits['y'].values.astype(np.float64),
+                            np.ones_like(fits['y'])*coords[:, 0],
                             atol=NOISY_CENTER_ATOL, err_msg='Y mismatch')
 
 if __name__ == '__main__':
