@@ -11,6 +11,13 @@ from circletracking import (ellipse_grid, ellipsoid_grid, locate_ellipse,
                             fit_ellipsoid, find_ellipsoid, find_ellipse,
                             locate_ellipsoid, locate_ellipsoid_fast,
                             SimulatedImage, find_disks)
+from scipy.spatial import cKDTree
+
+
+def sort_positions(actual, expected):
+    tree = cKDTree(actual)
+    deviations, argsort = tree.query([expected])
+    return deviations, actual[argsort][0]
 
 
 class TestFits(unittest.TestCase):
@@ -307,7 +314,7 @@ class TestCircles(unittest.TestCase):
         self.number = 10
         self.radii = [15.0, 20.0, 25.0]
 
-    def generate_image(self, radius):
+    def generate_image(self, radius, n):
         """
         Generate the test image
 
@@ -316,33 +323,22 @@ class TestCircles(unittest.TestCase):
         """
         image = SimulatedImage(shape=(300, 300), radius=radius,
                                noise=0.2)
-        image.draw_features(1)
+        image.draw_features(n, margin=2*radius, separation=2*radius + 2)
         return image
 
-    def get_coords(self, generated_image):
-        """
-        Get x, y coords
-        """
-        if len(generated_image.coords) == 1:
-            y, x = generated_image.coords[0]
-        else:
-            y, x = (0, 0)
-
-        return x, y
-
-    def test_locate_particles(self):
+    def test_locate_single(self):
         """
         Test locating particles
         """
         for _ in range(self.number):
             for radius in self.radii:
-                generated_image = self.generate_image(radius)
+                generated_image = self.generate_image(radius, 1)
 
                 fits = find_disks(generated_image.image, (radius / 2.0,
                                                           radius * 2.0),
                                   number_of_disks=1)
 
-                x_coord, y_coord = self.get_coords(generated_image)
+                y_coord, x_coord = generated_image.coords[0]
                 NOISY_CENTER_ATOL = 0.8
                 NOISY_RADIUS_RTOL = 0.05
 
@@ -354,6 +350,35 @@ class TestCircles(unittest.TestCase):
                                 atol=NOISY_CENTER_ATOL, err_msg='X mismatch')
                 assert_allclose(fits['y'], np.ones_like(fits['y'])*y_coord,
                                 atol=NOISY_CENTER_ATOL, err_msg='Y mismatch')
+
+    def test_locate_multiple(self):
+        """
+        Test locating particles
+        """
+        for radius in self.radii:
+            generated_image = self.generate_image(radius, self.number)
+
+            fits = find_disks(generated_image.image, (radius / 2.0,
+                                                      radius * 2.0),
+                              number_of_disks=len(generated_image.coords))
+
+            NOISY_CENTER_ATOL = 0.8
+            NOISY_RADIUS_RTOL = 0.05
+
+            _, coords = sort_positions(generated_image.coords,
+                                       np.array([fits['y'].values,
+                                                 fits['x'].values]).T)
+
+
+            assert_equal(len(fits), len(generated_image.coords),
+                         'Particle number mismatch')
+            assert_allclose(fits['r'], np.ones_like(fits['r'])*radius,
+                            rtol=NOISY_RADIUS_RTOL,
+                            err_msg='Radius mismatch')
+            assert_allclose(fits['x'], np.ones_like(fits['x'])*coords[:, 1],
+                            atol=NOISY_CENTER_ATOL, err_msg='X mismatch')
+            assert_allclose(fits['y'], np.ones_like(fits['y'])*coords[:, 0],
+                            atol=NOISY_CENTER_ATOL, err_msg='Y mismatch')
 
 if __name__ == '__main__':
     nose.runmodule(argv=[__file__, '-vvs', '-x'], exit=False)
