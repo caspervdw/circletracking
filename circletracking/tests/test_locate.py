@@ -157,7 +157,7 @@ class TestFits(unittest.TestCase):
 
         result = fit_ellipsoid(points, mode='xy', return_mode='skew')
         assert_allclose(skew, result[2], atol=0.01)
-        assert_allclose(radius, result[0], atol=0.1)
+        assert_allclose(radius, result[0], atol=0.2)
         assert_allclose(center, result[1], atol=0.1)
 
 
