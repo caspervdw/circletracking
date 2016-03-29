@@ -304,32 +304,21 @@ class TestEllipsoid(unittest.TestCase):
 
 
 class TestCircles(unittest.TestCase):
-    """
-    Test case for finding circular disks
-    """
+    """ Test case for finding circular disks """
     def setUp(self):
-        """
-        Setup test image
-        """
+        """ Setup test image """
         self.number = 10
         self.radii = [15.0, 20.0, 25.0]
 
     def generate_image(self, radius, n):
-        """
-        Generate the test image
-
-        :rtype : semtracking.SimulatedImage
-        :return:
-        """
+        """ Generate the test image """
         image = SimulatedImage(shape=(300, 300), radius=radius,
                                noise=0.2)
         image.draw_features(n, margin=2*radius, separation=2*radius + 2)
         return image
 
     def test_locate_single(self):
-        """
-        Test locating particles
-        """
+        """ Test locating particles """
         for _ in range(self.number):
             for radius in self.radii:
                 generated_image = self.generate_image(radius, 1)
@@ -352,9 +341,7 @@ class TestCircles(unittest.TestCase):
                                 atol=NOISY_CENTER_ATOL, err_msg='Y mismatch')
 
     def test_locate_multiple(self):
-        """
-        Test locating particles
-        """
+        """ Test locating particles """
         for radius in self.radii:
             generated_image = self.generate_image(radius, self.number)
 

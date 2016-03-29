@@ -1,22 +1,16 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
+from __future__ import (division, print_function, unicode_literals)
 import six
 import pandas
 import matplotlib.pyplot as plt
 
 
 class UserCheckFits(object):
-    """
-    Let user manually check fitted circles using an interface in Matplotlib
-    """
+    """ Let user manually check fitted circles using an interface in Matplotlib """
     # Store fits so that we can use it in event callback
     stored_fits = pandas.DataFrame()
 
     def __init__(self, filename, micron_per_pixel):
-        """
-        Let user manually check fits, removing them by clicking
-        :return:
-        """
+        """ Let user manually check fits, removing them by clicking """
         UserCheckFits.stored_fits = pandas.DataFrame.from_csv(filename)
 
         # Set scale in pixels
@@ -25,11 +19,6 @@ class UserCheckFits(object):
         UserCheckFits.stored_fits['remove'] = False
 
     def user_check_fits(self, image):
-        """
-
-        :param image:
-        :return:
-        """
         self.plot_fits_for_user_confirmation(image)
 
         mask = (UserCheckFits.stored_fits['remove'] == False)
@@ -44,10 +33,7 @@ class UserCheckFits(object):
 
     @classmethod
     def on_pick(cls, event):
-        """
-        User clicked on a fit
-        :param event:
-        """
+        """ User clicked on a fit """
         # Get index from label
         fit_number = int(event.artist.get_label())
 
@@ -66,7 +52,6 @@ class UserCheckFits(object):
         """
         Ask user to check if all fits are correct.
         Clicking on a fit removes it from the results.
-        :param image:
         """
         _imshow_style = dict(origin='lower', interpolation='none',
                              cmap=plt.cm.gray)
@@ -99,10 +84,7 @@ class UserCheckFits(object):
 
     @staticmethod
     def set_annotation_color(index, color):
-        """
-        Remove particle index from the current plot
-        :param index:
-        """
+        """ Remove particle index from the current plot """
         children = plt.gca().get_children()
         children = [c for c in children if isinstance(c, plt.Annotation)
                     and int(c._text) == index]

@@ -1,4 +1,3 @@
-from __future__ import absolute_import
 from .find import find_ellipse, find_ellipsoid, find_disks
 from .refine import refine_ellipse, refine_ellipsoid_fast, refine_ellipsoid
 from .locate import locate_ellipse, locate_ellipsoid, locate_ellipsoid_fast

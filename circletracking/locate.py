@@ -18,18 +18,18 @@ def locate_ellipse(frame, mode='ellipse_aligned', n=None, rad_range=None,
     ----------
     frame: ndarray
     n : int
-    number of points on the ellipse that are used for refine
+        number of points on the ellipse that are used for refine
     spacing: float
-    spacing between points on an xy circle, for grid
+        spacing between points on an xy circle, for grid
     rad_range: tuple of floats
-    length of the line (distance inwards, distance outwards)
+        length of the line (distance inwards, distance outwards)
     maxfit_size: integer
-    pixels around maximum pixel that will be used in linear regression
+        pixels around maximum pixel that will be used in linear regression
     spline_order: integer
-    interpolation order for edge crossections
+        interpolation order for edge crossections
     threshold: float
-    a threshold is calculated based on the global maximum
-    fitregions are rejected if their average value is lower than this
+        a threshold is calculated based on the global maximum
+        fitregions are rejected if their average value is lower than this
 
     Returns
     -------
@@ -59,27 +59,27 @@ def locate_ellipsoid_fast(frame, n_xy=None, n_xz=None, rad_range=None,
     ----------
     image3d: 3D ndarray
     n_xy: integer
-    number of points on the ellipse that are used for refine in xy plane
+        number of points on the ellipse that are used for refine in xy plane
     n_xz: integer
-    number of points on the ellipse that are used for refine in xz plane
+        number of points on the ellipse that are used for refine in xz plane
     rad_range: tuple of floats
-    length of the line (distance inwards, distance outwards)
+        length of the line (distance inwards, distance outwards)
     maxfit_size: integer
-    pixels around maximum pixel that will be used in linear regression
+        pixels around maximum pixel that will be used in linear regression
     spline_order: integer
-    interpolation order for edge crossections
+        interpolation order for edge crossections
     threshold: float
-    a threshold is calculated based on the global maximum
-    fitregions are rejected if their average value is lower than this
+        a threshold is calculated based on the global maximum
+        fitregions are rejected if their average value is lower than this
     radius_rtol : float, optional
-    the maximum relative tolerance for the difference between initial
-    and refined radii, Default 0.5
+        the maximum relative tolerance for the difference between initial
+        and refined radii, Default 0.5
     radius_atol : float, optional
-    the maximum absolute tolerance for the difference between initial
-    and refined radii, Default 30.
+        the maximum absolute tolerance for the difference between initial
+        and refined radii, Default 30.
     center_atol : float, optional
-    the maximum absolute tolerance for the difference between initial
-    and refined radii, Default 30.
+        the maximum absolute tolerance for the difference between initial
+        and refined radii, Default 30.
 
     Returns
     -------
@@ -108,16 +108,16 @@ def locate_ellipsoid(frame, spacing=1, rad_range=None, maxfit_size=2,
     ----------
     image3d: 3D ndarray
     spacing: float
-    spacing between points on an xy circle, for grid
+        spacing between points on an xy circle, for grid
     rad_range: tuple of floats
-    length of the line (distance inwards, distance outwards)
+        length of the line (distance inwards, distance outwards)
     maxfit_size: integer
-    pixels around maximum pixel that will be used in linear regression
+        pixels around maximum pixel that will be used in linear regression
     spline_order: integer
-    interpolation order for edge crossections
+        interpolation order for edge crossections
     threshold: float
-    a threshold is calculated based on the global maximum
-    fitregions are rejected if their average value is lower than this
+        a threshold is calculated based on the global maximum
+        fitregions are rejected if their average value is lower than this
 
     Returns
     -------
@@ -139,13 +139,7 @@ def locate_ellipsoid(frame, spacing=1, rad_range=None, maxfit_size=2,
 
 
 def locate_multiple_disks(image, size_range, number_of_disks=100):
-    """
-    Find circular particles in the image
-    :param size_range:
-    :rtype : pandas.DataFrame
-    :param n:
-    :return:
-    """
+    """ Find circular particles in the image """
     blobs = find_disks(image, size_range, number_of_disks)
 
     if blobs.empty:

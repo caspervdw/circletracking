@@ -64,11 +64,7 @@ class SimulatedImage(object):
         self.image = np.zeros_like(self.image)
 
     def normalize_image(self, image):
-        """
-        Normalize image
-        :param image:
-        :return:
-        """
+        """ Normalize image """
         image = image.astype(self.dtype)
         abs_max = np.max(np.abs(image))
         return image / abs_max

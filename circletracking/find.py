@@ -20,11 +20,7 @@ import scipy
 from .algebraic import fit_ellipse
 
 def find_disks(image, size_range, number_of_disks=100):
-    """
-    Locate blobs in the image by using a Laplacian of Gaussian method
-    :rtype : pandas.DataFrame
-    :return:
-    """
+    """ Locate blobs in the image by using a Laplacian of Gaussian method """
     number_of_disks = int(np.round(number_of_disks))
     radii = np.linspace(size_range[0], size_range[1],
                         num=min(abs(size_range[0] - size_range[1]) * 2.0, 30),
@@ -54,7 +50,7 @@ def find_ellipse(image, mode='ellipse_aligned', min_length=24):
     image : 2D numpy array of numbers
     mode : {'ellipse', 'ellipse_aligned', 'circle'}
     min_length : number
-    minimum length of contour
+        minimum length of contour
 
     Returns
     -------
@@ -102,8 +98,8 @@ def find_ellipsoid(image3d, center_atol=None):
     ----------
     image3d : 3D numpy array of numbers
     center_atol : float, optional
-    the maximum absolute tolerance for the difference between the found
-    centers, Default None
+        the maximum absolute tolerance for the difference between the found
+        centers, Default None
 
     Returns
     -------
@@ -132,11 +128,6 @@ def find_ellipsoid(image3d, center_atol=None):
 
 
 def merge_hough_same_values(data, number_to_keep=100):
-    """
-
-    :param data:
-    :return:
-    """
     while True:
         # Rescale positions, so that pairs are identified below a distance
         # of 1. Do so every iteration (room for improvement?)
