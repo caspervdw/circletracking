@@ -24,6 +24,7 @@ def find_disks(image, size_range, number_of_disks=100):
     number_of_disks = int(np.round(number_of_disks))
     radii = np.linspace(size_range[0], size_range[1],
                         num=min(abs(size_range[0] - size_range[1]) * 2.0, 30))
+    radii = radii.astype(np.float)
 
     # Find edges
     edges = canny(image)
