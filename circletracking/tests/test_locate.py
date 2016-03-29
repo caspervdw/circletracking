@@ -1,13 +1,23 @@
+""" Nosetests for finding features """
 from __future__ import (division, unicode_literals)
 
+import unittest
+import nose
+from numpy.testing import assert_allclose, assert_equal
 import numpy as np
+import pandas
 from circletracking import (ellipse_grid, ellipsoid_grid, locate_ellipse,
                             draw_ellipse, draw_ellipsoid, fit_ellipse,
                             fit_ellipsoid, find_ellipsoid, find_ellipse,
-                            locate_ellipsoid, locate_ellipsoid_fast)
-import unittest
-import nose
-from numpy.testing import assert_allclose
+                            locate_ellipsoid, locate_ellipsoid_fast,
+                            SimulatedImage, find_disks)
+from scipy.spatial import cKDTree
+
+
+def sort_positions(actual, expected):
+    tree = cKDTree(actual)
+    deviations, argsort = tree.query([expected])
+    return deviations, actual[argsort][0]
 
 
 class TestFits(unittest.TestCase):
@@ -147,7 +157,7 @@ class TestFits(unittest.TestCase):
 
         result = fit_ellipsoid(points, mode='xy', return_mode='skew')
         assert_allclose(skew, result[2], atol=0.01)
-        assert_allclose(radius, result[0], atol=0.1)
+        assert_allclose(radius, result[0], atol=0.2)
         assert_allclose(center, result[1], atol=0.1)
 
 
@@ -292,6 +302,72 @@ class TestEllipsoid(unittest.TestCase):
         assert_allclose(result['yr'], self.radius[1], rtol=RADIUS_RTOL)
         assert_allclose(result['xr'], self.radius[2], rtol=RADIUS_RTOL)
 
+
+class TestCircles(unittest.TestCase):
+    """ Test case for finding circular disks """
+    def setUp(self):
+        """ Setup test image """
+        self.number = 10
+        self.radii = [15.0, 20.0, 25.0]
+
+    def generate_image(self, radius, n):
+        """ Generate the test image """
+        image = SimulatedImage(shape=(300, 300), radius=radius,
+                               noise=0.2)
+        image.draw_features(n, margin=2*radius, separation=2*radius + 2)
+        return image
+
+    def test_locate_single(self):
+        """ Test locating particles """
+        for _ in range(self.number):
+            for radius in self.radii:
+                generated_image = self.generate_image(radius, 1)
+
+                fits = find_disks(generated_image.image, (radius / 2.0,
+                                                          radius * 2.0),
+                                  number_of_disks=1)
+
+                y_coord, x_coord = generated_image.coords[0]
+                NOISY_CENTER_ATOL = 1.
+                NOISY_RADIUS_RTOL = 0.1
+                r, x, y = fits[['r', 'x', 'y']].values.astype(np.float64).T
+                assert_equal(len(fits), 1, 'Particle number mismatch')
+                assert_allclose(r, radius,
+                                rtol=NOISY_RADIUS_RTOL,
+                                err_msg='Radius mismatch')
+                assert_allclose(x, x_coord,
+                                atol=NOISY_CENTER_ATOL, err_msg='X mismatch')
+                assert_allclose(y, y_coord,
+                                atol=NOISY_CENTER_ATOL, err_msg='Y mismatch')
+
+    def test_locate_multiple(self):
+        """ Test locating particles """
+        for radius in self.radii:
+            generated_image = self.generate_image(radius, self.number)
+            actual_number = len(generated_image.coords)
+            fits = find_disks(generated_image.image, (radius / 2.0,
+                                                      radius * 2.0),
+                              number_of_disks=actual_number)
+
+            NOISY_CENTER_ATOL = 1.
+            NOISY_RADIUS_RTOL = 0.1
+
+            _, coords = sort_positions(generated_image.coords,
+                                       np.array([fits['y'].values,
+                                                 fits['x'].values]).T)
+
+
+            assert_equal(len(fits), actual_number,
+                         'Particle number mismatch')
+            r, x, y = fits[['r', 'x', 'y']].values.astype(np.float64).T
+
+            assert_allclose(r, np.full(actual_number, radius, np.float64),
+                            rtol=NOISY_RADIUS_RTOL,
+                            err_msg='Radius mismatch')
+            assert_allclose(x, coords[:, 1],
+                            atol=NOISY_CENTER_ATOL, err_msg='X mismatch')
+            assert_allclose(y, coords[:, 0],
+                            atol=NOISY_CENTER_ATOL, err_msg='Y mismatch')
 
 if __name__ == '__main__':
     nose.runmodule(argv=[__file__, '-vvs', '-x'], exit=False)
