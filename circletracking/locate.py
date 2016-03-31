@@ -145,6 +145,5 @@ def locate_disks(image, size_range, number_of_disks=100):
     if blobs.empty:
         return pd.DataFrame(columns=['r', 'y', 'x', 'dev'])
 
-    return refine_disks(image, blobs, size_range,
-                        num_points_circle=number_of_disks)
+    return refine_disks(image, blobs, num_points_circle=number_of_disks)
 
