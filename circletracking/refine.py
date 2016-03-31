@@ -67,10 +67,14 @@ def fit_max_2d(arr, maxfit_size=2, threshold=0.1):
 
 def refine_disks(image, blobs, num_points_circle=100):
     """ Refine multiple Hough detected blobs """
+    if blobs is None:
+        return pd.DataFrame(colums=['r', 'y', 'x'], data=[np.nan] * 3)
+
     result = blobs.copy()
+    result.drop('accum', axis=1, inplace=True)
     for i in result.index:
-        fit, _ = fit_edge_2d(image, blobs.loc[i],
-                             num_points_circle=num_points_circle)
+        fit = fit_edge_2d(image, blobs.loc[i],
+                          num_points_circle=num_points_circle)
         if fit is None:
             result.loc[i, ['r', 'y', 'x']] = np.nan
         else:
@@ -78,11 +82,9 @@ def refine_disks(image, blobs, num_points_circle=100):
     return result
 
 
-def fit_edge_2d(image, params, rad_range=None, threshold=None,
-                num_points_circle=100):
+def fit_edge_2d(image, params, threshold=None, num_points_circle=100):
     """ Find a circle based on the blob """
-    if rad_range is None:
-        rad_range = (-params.r / 2, params.r / 2)
+    rad_range = (-params.r / 2, params.r / 2)
 
     # Get intensity in spline representation
     coords = (params.r, params.r, params.y, params.x)
@@ -91,24 +93,22 @@ def fit_edge_2d(image, params, rad_range=None, threshold=None,
                                                          num_points_circle)
 
     if not check_intensity_interpolation(intensity, threshold):
-        return None, None
+        return None
 
     # Find the coordinates of the edge
-    r_dev = find_edge(intensity)
+    edge_positions = find_edge(intensity)
 
-    if np.isnan(r_dev).any():
-        return None, None
-
-    # Set outliers to mean of rest of x coords
-    # r_dev = remove_outliers(r_dev)
+    if np.isnan(edge_positions).any():
+        return None
 
     # Convert to cartesian
-    coord_new = mapped_coords_to_normal_coords(pos, r_dev, rad_range, normal)
+    coord_new = mapped_coords_to_normal_coords(pos, edge_positions,
+                                               rad_range, normal)
 
     # Fit the circle
     radius, center, _ = fit_ellipse(coord_new, mode='xy')
 
-    return tuple(radius) + tuple(center), coord_new.T
+    return tuple(radius) + tuple(center)
 
 
 def find_edge(intensity):
@@ -133,21 +133,7 @@ def find_edge(intensity):
     # Try to interpolate missing x values
     coords_df = coords_df.interpolate(method='nearest', axis=0).ffill().bfill()
 
-    # Instead of returning x,y dataframe, return deviations from center
-    r_dev = coords_df['x'] - (intensity.shape[1] / 2.0)
-
-    return r_dev.values
-#
-#
-# def remove_outliers(edge_coords):
-#     edge_coords = pd.DataFrame(edge_coords, columns=['x'])
-#     mean = np.mean(edge_coords.x)
-#     comparison = 0.2 * mean
-#     mask_outlier = abs(edge_coords.x - mean) > comparison
-#     mask_no_outlier = abs(edge_coords.x - mean) <= comparison
-#     mean_no_outlier = np.mean(edge_coords[mask_no_outlier].x)
-#     edge_coords.ix[mask_outlier, 'x'] = mean_no_outlier
-#     return edge_coords.x.values
+    return coords_df['x'].values
 
 
 def create_binary_mask(intensity, threshold=None):
