@@ -454,7 +454,7 @@ class TestDisks(RepeatedUnitTests):
 
     @repeat_test_std(number, names=('radius', 'y_coord', 'x_coord'), atol=5)
     def test_find_single(self):
-        """ Test locating particles """
+        """ Test finding single particle """
         radius = np.random.random() * 15 + 15
         generated_image = self.generate_image(radius, 1)
 
@@ -472,7 +472,7 @@ class TestDisks(RepeatedUnitTests):
 
     @repeat_test_std(number, names=('radius', 'y_coord', 'x_coord'), atol=5)
     def test_find_single_noisy(self):
-        """ Test locating particles """
+        """ Test find single noisy particle """
         radius = np.random.random() * 15 + 15
         generated_image = self.generate_image(radius, 1, noise=0.2)
 
@@ -490,7 +490,7 @@ class TestDisks(RepeatedUnitTests):
 
     @repeat_test_std(number, names=('radii', 'y_coords', 'x_coords'), atol=5)
     def test_find_multiple_noisy(self):
-        """ Test locating particles """
+        """ Test finding multiple particles (noisy) """
         radius = np.random.random() * 15 + 15
         generated_image = self.generate_image(radius, 10, noise=0.2)
         actual_number = len(generated_image.coords)
@@ -502,19 +502,18 @@ class TestDisks(RepeatedUnitTests):
                                    np.array([fits['y'].values,
                                              fits['x'].values]).T)
 
-        if len(fits) != 1: # Particle number mismatch
+        if len(fits) == 0:  # Nothing found
             r, y, x = np.nan, np.nan, np.nan
         else:
-            r, x, y = fits[['r', 'x', 'y']].values.astype(np.float64).T
+            r, y, x = fits[['r', 'y', 'x']].values.astype(np.float64).T
 
-        return (r, x, y), (np.full(actual_number, radius, np.float64),
-                           coords[:, 1], coords[:, 0])
-
+        return (r, y, x), (np.full(actual_number, radius, np.float64),
+                           coords[:, 0], coords[:, 1])
 
     @repeat_test_std(number, names=('radius', 'y_coord', 'x_coord'),
                      atol=0.1)
     def test_locate_single_noisy(self):
-        """ Test locating particles """
+        """ Test locating single particle (noisy) """
         radius = np.random.random() * 15 + 15
         generated_image = self.generate_image(radius, 1, noise=0.2)
 
@@ -523,7 +522,7 @@ class TestDisks(RepeatedUnitTests):
                             number_of_disks=1)
 
         y_coord, x_coord = generated_image.coords[0]
-        if len(fits) != 1: # Particle number mismatch
+        if len(fits) != 1:  # Particle number mismatch
             r, y, x = np.nan, np.nan, np.nan
         else:
             r, x, y = fits[['r', 'x', 'y']].values[0]

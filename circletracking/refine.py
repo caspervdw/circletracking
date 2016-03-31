@@ -65,11 +65,12 @@ def fit_max_2d(arr, maxfit_size=2, threshold=0.1):
     return r_dev + maxes
 
 
-def refine_disks(image, blobs, size_range, num_points_circle=100):
+def refine_disks(image, blobs, num_points_circle=100):
     """ Refine multiple Hough detected blobs """
     result = blobs.copy()
     for i in result.index:
-        fit, _ = fit_edge_2d(image, blobs.loc[i], size_range, num_points_circle)
+        fit, _ = fit_edge_2d(image, blobs.loc[i],
+                             num_points_circle=num_points_circle)
         if fit is None:
             result.loc[i, ['r', 'y', 'x']] = np.nan
         else:
@@ -77,7 +78,7 @@ def refine_disks(image, blobs, size_range, num_points_circle=100):
     return result
 
 
-def fit_edge_2d(image, params, rad_range, threshold=None,
+def fit_edge_2d(image, params, rad_range=None, threshold=None,
                 num_points_circle=100):
     """ Find a circle based on the blob """
     if rad_range is None:
@@ -115,8 +116,8 @@ def find_edge(intensity):
     mask = create_binary_mask(intensity)
 
     # Take last x coord of left list, first x coord of right list and take y
-    coords = [(([i for i, l in enumerate(row) if l][-1]
-                + [j for j, r in enumerate(row) if not r][0]) / 2.0, y) for
+    coords = [(([i for i, l in enumerate(row) if l][-1] +
+                [j for j, r in enumerate(row) if not r][0]) / 2.0, y) for
               y, row in enumerate(mask) if True in row and False in row]
     coords_df = pd.DataFrame(columns=['x', 'y'], data=coords)
 
