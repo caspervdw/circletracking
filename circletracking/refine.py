@@ -10,7 +10,7 @@ try:
     from skimage.filters import threshold_otsu
 except ImportError:
     from skimage.filter import threshold_otsu  # skimage <= 0.10
-import pandas
+import pandas as pd
 
 from .algebraic import (ellipse_grid, ellipsoid_grid, fit_ellipse,
                         fit_ellipsoid)
@@ -65,14 +65,12 @@ def fit_max_2d(arr, maxfit_size=2, threshold=0.1):
     return r_dev + maxes
 
 
-def refine_multiple(image, blobs, size_range, num_points_circle=100):
+def refine_disks(image, blobs, size_range, num_points_circle=100):
     """ Refine multiple Hough detected blobs """
-    fit = pandas.DataFrame(columns=['r', 'y', 'x', 'dev'])
+    fit = []
     for _, blob in blobs.iterrows():
-        fit = pandas.concat([fit, fit_edge_2d(image, blob, size_range,
-                                              num_points_circle)],
-                            ignore_index=True)
-    return fit
+        fit.append(fit_edge_2d(image, blob, size_range, num_points_circle))
+    return pd.DataFrame(fit, columns=['r', 'y', 'x', 'dev'])
 
 
 def fit_edge_2d(image, params, rad_range, threshold=None,
@@ -116,7 +114,7 @@ def find_edge(intensity):
     coords = [(([i for i, l in enumerate(row) if l][-1]
                 + [j for j, r in enumerate(row) if not r][0]) / 2.0, y) for
               y, row in enumerate(mask) if True in row and False in row]
-    coords_df = pandas.DataFrame(columns=['x', 'y'], data=coords)
+    coords_df = pd.DataFrame(columns=['x', 'y'], data=coords)
 
     # Set the index
     coords_df = coords_df.set_index('y', drop=False, verify_integrity=False)
@@ -137,7 +135,7 @@ def find_edge(intensity):
 
 
 def remove_outliers(edge_coords):
-    edge_coords = pandas.DataFrame(edge_coords, columns=['x'])
+    edge_coords = pd.DataFrame(edge_coords, columns=['x'])
     mean = np.mean(edge_coords.x)
     comparison = 0.2 * mean
     mask_outlier = abs(edge_coords.x - mean) > comparison
