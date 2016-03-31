@@ -100,7 +100,7 @@ def fit_edge_2d(image, params, rad_range=None, threshold=None,
         return None, None
 
     # Set outliers to mean of rest of x coords
-    r_dev = remove_outliers(r_dev)
+    # r_dev = remove_outliers(r_dev)
 
     # Convert to cartesian
     coord_new = mapped_coords_to_normal_coords(pos, r_dev, rad_range, normal)
@@ -137,17 +137,17 @@ def find_edge(intensity):
     r_dev = coords_df['x'] - (intensity.shape[1] / 2.0)
 
     return r_dev.values
-
-
-def remove_outliers(edge_coords):
-    edge_coords = pd.DataFrame(edge_coords, columns=['x'])
-    mean = np.mean(edge_coords.x)
-    comparison = 0.2 * mean
-    mask_outlier = abs(edge_coords.x - mean) > comparison
-    mask_no_outlier = abs(edge_coords.x - mean) <= comparison
-    mean_no_outlier = np.mean(edge_coords[mask_no_outlier].x)
-    edge_coords.ix[mask_outlier, 'x'] = mean_no_outlier
-    return edge_coords.x.values
+#
+#
+# def remove_outliers(edge_coords):
+#     edge_coords = pd.DataFrame(edge_coords, columns=['x'])
+#     mean = np.mean(edge_coords.x)
+#     comparison = 0.2 * mean
+#     mask_outlier = abs(edge_coords.x - mean) > comparison
+#     mask_no_outlier = abs(edge_coords.x - mean) <= comparison
+#     mean_no_outlier = np.mean(edge_coords[mask_no_outlier].x)
+#     edge_coords.ix[mask_outlier, 'x'] = mean_no_outlier
+#     return edge_coords.x.values
 
 
 def create_binary_mask(intensity, threshold=None):
