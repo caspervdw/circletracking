@@ -1,17 +1,15 @@
 """ Nosetests for finding features """
 from __future__ import (division, unicode_literals)
 
-import unittest
 import nose
-from functools import wraps
-from numpy.testing import assert_allclose, assert_equal
 import numpy as np
-import pandas as pd
+import unittest
 from circletracking import (ellipse_grid, ellipsoid_grid, locate_ellipse,
                             draw_ellipse, draw_ellipsoid, fit_ellipse,
                             fit_ellipsoid, find_ellipsoid, find_ellipse,
                             locate_ellipsoid, locate_ellipsoid_fast,
                             SimulatedImage, find_disks, locate_disks)
+from circletracking.tests.common import RepeatedUnitTests, repeat_test_std
 from scipy.spatial import cKDTree
 
 
@@ -21,97 +19,13 @@ def sort_positions(actual, expected):
     return deviations, actual[argsort][0]
 
 
-class repeat_test_std(object):
-    def __init__(self, repeats, names=None, atol=None, rtol=None, fails=None):
-        self.repeats = repeats
-        self.atol = atol
-        self.rtol = rtol
-        self.fails = fails
-        self.names = names
+class TestFits(RepeatedUnitTests, unittest.TestSuite):
+    repeats = 100
+    names = ('radius_y', 'radius_x', 'center_y', 'center_x')
 
-    def __call__(self, func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            global result_table
-            actual = []
-            expected = []
-            for i in range(self.repeats):
-                result = func(*args, **kwargs)
-                if result is None:
-                    continue
-                a, e = result
-                if not hasattr(a, '__iter__'):
-                    a = (a,)
-                if not hasattr(e, '__iter__'):
-                    e = (e,)
-                assert len(a) == len(e)
-                actual.append(a)
-                expected.append(e)
-            actual = np.array(actual, dtype=np.float).T
-            expected = np.array(expected, dtype=np.float).T
-            n_tests = actual.shape[0]
-            atol, rtol, names, fails = self.atol, self.rtol, self.names, self.fails
-            if not hasattr(self.atol, '__iter__'):
-                atol = [atol] * n_tests
-            if not hasattr(self.rtol, '__iter__'):
-                rtol = [rtol] * n_tests
-            if not hasattr(self.fails, '__iter__'):
-                fails = [fails] * n_tests
-            if not hasattr(self.names, '__iter__'):
-                names = [names] * n_tests
-            else:
-                names = list(names)
-            _result_table = []
-            for i, (a, e) in enumerate(zip(actual, expected)):
-                n_failed = np.sum(~np.isfinite(a))
-                rms_dev = np.sqrt(np.sum((a - e)**2))
-                rms_dev_rel = np.sqrt(np.sum((a / e - 1)**2))
-                if names[i] is None:
-                    names[i] = ''
-                names[i] = func.__name__ + ' ({})'.format(names[i])
-                res = pd.Series([n_failed, rms_dev, rms_dev_rel], name=names[i])
-                _result_table.append(res)
-
-            try:
-                result_table.extend(_result_table)
-            except NameError:
-                result_table = _result_table
-
-            for i, res in enumerate(_result_table):
-                if fails[i] is None:
-                    fails[i] = 0
-                if n_failed > fails[i]:
-                    raise AssertionError('{0:.0f}% of the tests in "{1}" failed'.format(n_failed/self.repeats*100, names[i]))
-                if atol[i] is not None:
-                    if rms_dev > atol[i]:
-                        raise AssertionError('rms deviation in "{2}" is too large ({0} > {1})'.format(rms_dev, atol[i], names[i]))
-                if rtol[i] is not None:
-                    if rms_dev_rel > rtol[i]:
-                        raise AssertionError('rms relative deviation in "{2}" is too large ({0} > {1})'.format(rms_dev_rel, rtol[i], names[i]))
-        return wrapper
-
-class RepeatedUnitTests(unittest.TestCase):
-    N = 10
-    @classmethod
-    def setUpClass(cls):
-        global result_table
-        result_table = []
-
-    @classmethod
-    def tearDownClass(cls):
-        global result_table
-        results_table = pd.DataFrame(result_table)
-        results_table.columns = ['fails', 'rms_dev', 'rms_rel_dev']
-        print('Tests results from {}:'.format(cls.__name__))
-        print(results_table)
-
-
-class TestFits(RepeatedUnitTests):
-    N = 100
-
-    @repeat_test_std(N, names=('radius_y', 'radius_x', 'center_y', 'center_x'),
-                     atol=1E-7)
+    @repeat_test_std
     def test_fit_circle(self):
+        self.atol = 1E-7
         noise = 0
         radius = (np.random.random() * 10 + 5,) * 2
         center = np.random.random((2)) * 10 + radius
@@ -125,9 +39,9 @@ class TestFits(RepeatedUnitTests):
                np.concatenate([radius, center])
 
 
-    @repeat_test_std(N, names=('radius_y', 'radius_x', 'center_y', 'center_x'),
-                     atol=[0.15, 0.15, 0.2, 0.2])
+    @repeat_test_std
     def test_fit_circle_noisy(self):
+        self.atol = [0.15, 0.15, 0.2, 0.2]
         noise = 0.2
         radius = (np.random.random() * 10 + 5,) * 2
         center = np.random.random((2)) * 10 + radius
@@ -141,9 +55,9 @@ class TestFits(RepeatedUnitTests):
                np.concatenate([radius, center])
 
 
-    @repeat_test_std(N, names=('radius_y', 'radius_x', 'center_y', 'center_x'),
-                     atol=1E-7)
+    @repeat_test_std
     def test_fit_ellipse_straight(self):
+        self.atol = 1E-7
         noise = 0
         radius = np.random.random((2)) * 10 + 5
         center = np.random.random((2)) * 10 + radius
@@ -157,9 +71,9 @@ class TestFits(RepeatedUnitTests):
                np.concatenate([radius, center])
 
 
-    @repeat_test_std(N, names=('radius_y', 'radius_x', 'center_y', 'center_x'),
-                     atol=[0.15, 0.15, 0.2, 0.2])
+    @repeat_test_std
     def test_fit_ellipse_straight_noisy(self):
+        self.atol = [0.15, 0.15, 0.2, 0.2]
         noise = 0.2
         radius = np.random.random((2)) * 10 + 5
         center = np.random.random((2)) * 10 + radius
@@ -196,10 +110,11 @@ class TestFits(RepeatedUnitTests):
         # assert_allclose(center, center_fit, atol=0.1)
         # assert_allclose(angle, angle_fit, atol=0.1)
 
-    @repeat_test_std(N, names=('radius_z', 'radius_y', 'radius_x',
-                                'center_z', 'center_y', 'center_x'),
-                     atol=1E-7)
+    @repeat_test_std
     def test_fit_ellipsoid_straight(self):
+        self.names = ('radius_z', 'radius_y', 'radius_x',
+                                'center_z', 'center_y', 'center_x')
+        self.atol = 1E-7
         radius = np.random.random((3)) * 10 + 5
         center = np.random.random((3)) * 10 + radius
         points, _ = ellipsoid_grid(radius, center)
@@ -210,10 +125,11 @@ class TestFits(RepeatedUnitTests):
                np.concatenate([radius, center])
 
 
-    @repeat_test_std(N, names=('radius_z', 'radius_y', 'radius_x',
-                                'center_z', 'center_y', 'center_x'),
-                     atol=0.1)
+    @repeat_test_std
     def test_fit_ellipsoid_straight_noisy(self):
+        self.names = ('radius_z', 'radius_y', 'radius_x',
+                                'center_z', 'center_y', 'center_x')
+        self.atol = 0.1
         noise = 0.2
         radius = np.random.random((3)) * 10 + 5
         center = np.random.random((3)) * 10 + radius
@@ -279,11 +195,12 @@ class TestFits(RepeatedUnitTests):
     #     assert_allclose(center, result[1], atol=0.1)
 
 
-    @repeat_test_std(N, names=('radius_z', 'radius_y', 'radius_x',
-                                'center_z', 'center_y', 'center_x',
-                                'skew_y', 'skew_x'),
-                     atol=1E-7)
+    @repeat_test_std
     def test_fit_ellipsoid_skewed(self):
+        self.names = ('radius_z', 'radius_y', 'radius_x',
+                      'center_z', 'center_y', 'center_x',
+                      'skew_y', 'skew_x')
+        self.atol = 1E-7
         radius = np.random.random((3)) * 10 + 5
         radius[1] = radius[2]
 
@@ -310,11 +227,12 @@ class TestFits(RepeatedUnitTests):
         return np.concatenate(result), \
                np.concatenate([radius, center, skew])
 
-    @repeat_test_std(N, names=('radius_z', 'radius_y', 'radius_x',
-                                'center_z', 'center_y', 'center_x',
-                                'skew_y', 'skew_x'),
-                     atol=[0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.03, 0.03])
+    @repeat_test_std
     def test_fit_ellipsoid_skewed_noisy(self):
+        self.names = ('radius_z', 'radius_y', 'radius_x',
+                      'center_z', 'center_y', 'center_x',
+                      'skew_y', 'skew_x')
+        self.atol = [0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.03, 0.03]
         noise = 0.2
         radius = np.random.random((3)) * 10 + 5
         radius[1] = radius[2]
@@ -344,14 +262,14 @@ class TestFits(RepeatedUnitTests):
                np.concatenate([radius, center, skew])
 
 
-class TestEllipse(RepeatedUnitTests):
-    N = 10
+class TestEllipse(RepeatedUnitTests, unittest.TestSuite):
+    repeats = 10
     shape = (300, 300)
     FWHM = 5
-
-    @repeat_test_std(N, names=('radius_y', 'radius_x', 'center_y', 'center_x'),
-                     atol=[1, 1, 0.1, 0.1])
+    names = ('radius_y', 'radius_x', 'center_y', 'center_x')
+    @repeat_test_std
     def test_circle_no_refine(self):
+        self.atol = [1, 1, 0.1, 0.1]
         noise = 0.02
         radius = (np.random.random() * 50 + 50,) * 2
         padding = [r + self.FWHM * 3 for r in radius]
@@ -363,9 +281,10 @@ class TestEllipse(RepeatedUnitTests):
 
         return result, np.concatenate([radius, center])
 
-    @repeat_test_std(N, names=('radius_y', 'radius_x', 'center_y', 'center_x'),
-                     atol=[None, None, 0.1, 0.1], rtol=[0.01, 0.01, None, None])
+    @repeat_test_std
     def test_circle_noisy(self):
+        self.atol = [None, None, 0.1, 0.1]
+        self.rtol = [0.01, 0.01, None, None]
         noise = 0.2
         radius = (np.random.random() * 50 + 50,) * 2
         padding = [r + self.FWHM * 3 for r in radius]
@@ -378,9 +297,10 @@ class TestEllipse(RepeatedUnitTests):
         return result[['yr', 'xr', 'yc', 'xc']].values, \
                np.concatenate([radius, center])
 
-    @repeat_test_std(N, names=('radius_y', 'radius_x', 'center_y', 'center_x'),
-                     atol=[None, None, 0.1, 0.1], rtol=[0.01, 0.01, None, None])
+    @repeat_test_std
     def test_ellipse_noisy(self):
+        self.atol = [None, None, 0.1, 0.1]
+        self.rtol = [0.01, 0.01, None, None]
         noise = 0.2
         radius = tuple(np.random.random(2) * 50 + 50,)
         padding = [r + self.FWHM * 3 for r in radius]
@@ -393,10 +313,12 @@ class TestEllipse(RepeatedUnitTests):
                np.concatenate([radius, center])
 
 
-class TestEllipsoid(RepeatedUnitTests):
-    N = 10
+class TestEllipsoid(RepeatedUnitTests, unittest.TestSuite):
+    repeats = 10
     shape = (250, 300, 300)
     FWHM = 5
+    names = ('radius_z', 'radius_y', 'radius_x',
+             'center_z', 'center_y', 'center_x')
 
     def gen_center_radius(self):
         R = np.random.random() * 50 + 50
@@ -407,20 +329,18 @@ class TestEllipsoid(RepeatedUnitTests):
                        for (s, p) in zip(self.shape, padding)])
         return center, radius
 
-    @repeat_test_std(N, names=('radius_z', 'radius_y', 'radius_x',
-                               'center_z', 'center_y', 'center_x'),
-                     atol=[5, 5, 5, 1, 1, 1])
+    @repeat_test_std
     def test_no_refine_noisy(self):
+        self.atol = [5, 5, 5, 1, 1, 1]
         center, radius = self.gen_center_radius()
         im = draw_ellipsoid(self.shape, radius, center,
                             FWHM=self.FWHM, noise=0.2)
         result = find_ellipsoid(im)
         return result, radius + center
 
-    @repeat_test_std(N, names=('radius_z', 'radius_y', 'radius_x',
-                           'center_z', 'center_y', 'center_x'),
-                     atol=[0.2, 0.1, 0.1, 0.1, 0.1, 0.1])
+    @repeat_test_std
     def test_locate_fast(self):
+        self.atol = [0.2, 0.1, 0.1, 0.1, 0.1, 0.1]
         center, radius = self.gen_center_radius()
         im = draw_ellipsoid(self.shape, radius, center,
                             FWHM=self.FWHM, noise=0.02)
@@ -428,10 +348,9 @@ class TestEllipsoid(RepeatedUnitTests):
         return result[['zr', 'yr', 'xr', 'zc', 'yc', 'xc']].values, \
                np.concatenate([radius, center])
 
-    @repeat_test_std(N, names=('radius_z', 'radius_y', 'radius_x',
-                               'center_z', 'center_y', 'center_x'),
-                     atol=[1, 0.5, 0.5, 0.1, 0.1, 0.1])
+    @repeat_test_std
     def test_locate_noisy(self):
+        self.atol = [1, 0.5, 0.5, 0.1, 0.1, 0.1]
         center, radius = self.gen_center_radius()
         im = draw_ellipsoid(self.shape, radius, center,
                             FWHM=self.FWHM, noise=0.2)
@@ -440,11 +359,11 @@ class TestEllipsoid(RepeatedUnitTests):
                np.concatenate([radius, center])
 
 
-class TestDisks(RepeatedUnitTests):
+class TestDisks(RepeatedUnitTests, unittest.TestCase):
     """ Test case for finding circular disks """
-    number = 1
     radii = [15.0, 20.0, 25.0]
-
+    repeats = 20
+    names = ('radius', 'y_coord', 'x_coord')
     def generate_image(self, radius, n, noise=0.02):
         """ Generate the test image """
         image = SimulatedImage(shape=(300, 300), radius=radius,
@@ -452,9 +371,10 @@ class TestDisks(RepeatedUnitTests):
         image.draw_features(n, margin=2*radius, separation=2*radius + 2)
         return image
 
-    @repeat_test_std(number, names=('radius', 'y_coord', 'x_coord'), atol=5)
+    @repeat_test_std
     def test_find_single(self):
         """ Test finding single particle """
+        self.atol = 5
         radius = np.random.random() * 15 + 15
         generated_image = self.generate_image(radius, 1)
 
@@ -470,9 +390,10 @@ class TestDisks(RepeatedUnitTests):
 
         return (r, y, x), (radius, y_coord, x_coord)
 
-    @repeat_test_std(number, names=('radius', 'y_coord', 'x_coord'), atol=5)
+    @repeat_test_std
     def test_find_single_noisy(self):
         """ Test find single noisy particle """
+        self.atol = 5
         radius = np.random.random() * 15 + 15
         generated_image = self.generate_image(radius, 1, noise=0.2)
 
@@ -488,9 +409,10 @@ class TestDisks(RepeatedUnitTests):
 
         return (r, y, x), (radius, y_coord, x_coord)
 
-    @repeat_test_std(number, names=('radii', 'y_coords', 'x_coords'), atol=5)
+    @repeat_test_std
     def test_find_multiple_noisy(self):
         """ Test finding multiple particles (noisy) """
+        self.atol = 5
         radius = np.random.random() * 15 + 15
         generated_image = self.generate_image(radius, 10, noise=0.2)
         actual_number = len(generated_image.coords)
@@ -503,18 +425,21 @@ class TestDisks(RepeatedUnitTests):
                                              fits['x'].values]).T)
 
         if len(fits) == 0:  # Nothing found
-            r, y, x = np.nan, np.nan, np.nan
+            actual = np.repeat([[np.nan, np.nan, np.nan]], actual_number,
+                                axis=0)
         else:
-            r, y, x = fits[['r', 'y', 'x']].values.astype(np.float64).T
+            actual = fits[['r', 'y', 'x']].values.astype(np.float64)
 
-        return (r, y, x), (np.full(actual_number, radius, np.float64),
-                           coords[:, 0], coords[:, 1])
+        expected = np.array([np.full(actual_number, radius, np.float64),
+                             coords[:, 0], coords[:, 1]]).T
 
-    @repeat_test_std(number, names=('radius', 'y_coord', 'x_coord'),
-                     atol=0.1)
+        return np.sqrt(((actual - expected)**2).mean(0)), [0] * 3
+
+    @repeat_test_std
     def test_locate_single_noisy(self):
         """ Test locating single particle (noisy) """
-        radius = np.random.random() * 15 + 15
+        self.atol = 0.1
+        radius = np.random.uniform(15, 30)
         generated_image = self.generate_image(radius, 1, noise=0.2)
 
         fits = locate_disks(generated_image.image, (radius / 2.0,
@@ -525,7 +450,7 @@ class TestDisks(RepeatedUnitTests):
         if len(fits) != 1:  # Particle number mismatch
             r, y, x = np.nan, np.nan, np.nan
         else:
-            r, x, y = fits[['r', 'x', 'y']].values[0]
+            r, y, x = fits[['r', 'y', 'x']].values[0]
 
         return (r, y, x), (radius, y_coord, x_coord)
 
