@@ -1,5 +1,6 @@
 from __future__ import (division, unicode_literals)
 
+import warnings
 import numpy as np
 from numpy.testing import assert_almost_equal
 from scipy.ndimage.interpolation import zoom, shift
@@ -43,7 +44,9 @@ def draw_ellipse(shape, radius, center, FWHM, noise=0):
     im[mask] += np.exp((h[mask] / sigma)**2/-2)/(sigma*np.sqrt(2*np.pi))
 
     # zoom so that radii are ok
-    im = zoom(im, zoom_factor)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        im = zoom(im, zoom_factor)
 
     # shift and make correct shape
     center_diff = center - np.array(center_of_mass(im))
@@ -78,7 +81,9 @@ def draw_ellipsoid(shape, radius, center, FWHM, noise=0):
     im[mask] += np.exp((h[mask] / sigma)**2/-2)/(sigma*np.sqrt(2*np.pi))
 
     # zoom so that radii are ok
-    im = zoom(im, zoom_factor)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        im = zoom(im, zoom_factor)
 
     # shift and make correct shape
     center_diff = center - np.array(center_of_mass(im))
