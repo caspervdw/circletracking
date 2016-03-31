@@ -442,7 +442,7 @@ class TestEllipsoid(RepeatedUnitTests):
 
 class TestDisks(RepeatedUnitTests):
     """ Test case for finding circular disks """
-    number = 100
+    number = 1
     radii = [15.0, 20.0, 25.0]
 
     def generate_image(self, radius, n, noise=0.02):
@@ -488,34 +488,27 @@ class TestDisks(RepeatedUnitTests):
 
         return (r, y, x), (radius, y_coord, x_coord)
 
-    def test_find_multiple(self):
+    @repeat_test_std(number, names=('radii', 'y_coords', 'x_coords'), atol=5)
+    def test_find_multiple_noisy(self):
         """ Test locating particles """
-        for radius in [15., 20., 25.]:
-            generated_image = self.generate_image(radius, 10)
-            actual_number = len(generated_image.coords)
-            fits = find_disks(generated_image.image, (radius / 2.0,
-                                                      radius * 2.0),
-                              number_of_disks=actual_number)
+        radius = np.random.random() * 15 + 15
+        generated_image = self.generate_image(radius, 10, noise=0.2)
+        actual_number = len(generated_image.coords)
+        fits = find_disks(generated_image.image, (radius / 2.0,
+                                                  radius * 2.0),
+                          number_of_disks=actual_number)
 
-            NOISY_CENTER_ATOL = 1.
-            NOISY_RADIUS_RTOL = 0.1
+        _, coords = sort_positions(generated_image.coords,
+                                   np.array([fits['y'].values,
+                                             fits['x'].values]).T)
 
-            _, coords = sort_positions(generated_image.coords,
-                                       np.array([fits['y'].values,
-                                                 fits['x'].values]).T)
-
-
-            assert_equal(len(fits), actual_number,
-                         'Particle number mismatch')
+        if len(fits) != 1: # Particle number mismatch
+            r, y, x = np.nan, np.nan, np.nan
+        else:
             r, x, y = fits[['r', 'x', 'y']].values.astype(np.float64).T
 
-            assert_allclose(r, np.full(actual_number, radius, np.float64),
-                            rtol=NOISY_RADIUS_RTOL,
-                            err_msg='Radius mismatch')
-            assert_allclose(x, coords[:, 1],
-                            atol=NOISY_CENTER_ATOL, err_msg='X mismatch')
-            assert_allclose(y, coords[:, 0],
-                            atol=NOISY_CENTER_ATOL, err_msg='Y mismatch')
+        return (r, x, y), (np.full(actual_number, radius, np.float64),
+                           coords[:, 1], coords[:, 0])
 
 
     @repeat_test_std(number, names=('radius', 'y_coord', 'x_coord'),
