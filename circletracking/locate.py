@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from .find import find_ellipse, find_ellipsoid, find_disks
 from .refine import (refine_ellipse, refine_ellipsoid,
-                     refine_ellipsoid_fast, refine_multiple)
+                     refine_ellipsoid_fast, refine_disks)
 
 
 def locate_ellipse(frame, mode='ellipse_aligned', n=None, rad_range=None,
@@ -138,13 +138,13 @@ def locate_ellipsoid(frame, spacing=1, rad_range=None, maxfit_size=2,
     return pd.Series(params, index=columns), r
 
 
-def locate_multiple_disks(image, size_range, number_of_disks=100):
+def locate_disks(image, size_range, number_of_disks=100):
     """ Find circular particles in the image """
     blobs = find_disks(image, size_range, number_of_disks)
 
     if blobs.empty:
         return pd.DataFrame(columns=['r', 'y', 'x', 'dev'])
 
-    return refine_multiple(image, blobs, size_range,
-                           num_points_circle=number_of_disks)
+    return refine_disks(image, blobs, size_range,
+                        num_points_circle=number_of_disks)
 
