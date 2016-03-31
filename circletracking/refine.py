@@ -67,10 +67,14 @@ def fit_max_2d(arr, maxfit_size=2, threshold=0.1):
 
 def refine_disks(image, blobs, size_range, num_points_circle=100):
     """ Refine multiple Hough detected blobs """
-    fit = []
-    for _, blob in blobs.iterrows():
-        fit.append(fit_edge_2d(image, blob, size_range, num_points_circle))
-    return pd.DataFrame(fit, columns=['r', 'y', 'x', 'dev'])
+    result = blobs.copy()
+    for i in result.index:
+        fit, _ = fit_edge_2d(image, blobs.loc[i], size_range, num_points_circle)
+        if fit is None:
+            result.loc[i, ['r', 'y', 'x']] = np.nan
+        else:
+            result.loc[i, ['r', 'y', 'x']] = fit[0], fit[2], fit[3]
+    return result
 
 
 def fit_edge_2d(image, params, rad_range, threshold=None,
@@ -86,13 +90,13 @@ def fit_edge_2d(image, params, rad_range, threshold=None,
                                                          num_points_circle)
 
     if not check_intensity_interpolation(intensity, threshold):
-        return None
+        return None, None
 
     # Find the coordinates of the edge
     r_dev = find_edge(intensity)
 
     if np.isnan(r_dev).any():
-        return None
+        return None, None
 
     # Set outliers to mean of rest of x coords
     r_dev = remove_outliers(r_dev)
