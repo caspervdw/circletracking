@@ -102,12 +102,12 @@ def fit_edge_2d(image, params, threshold=None, num_points_circle=100):
     # Find the coordinates of the edge
     edge_positions = find_edge(intensity)
 
-    if np.isnan(edge_positions).any():
-        return None
-
     # Convert to cartesian
     coord_new = mapped_coords_to_normal_coords(pos, edge_positions,
                                                rad_range, normal)
+
+    # Remove coords with NaN values
+    coord_new = coord_new[~np.isnan(coord_new).any(axis=1)]
 
     # Fit the circle
     radius, center, _ = fit_ellipse(coord_new, mode='xy')
@@ -122,8 +122,9 @@ def find_edge(intensity):
     # Take first falling edge where np.diff == -1
     xcoords = np.asarray(np.argmin(np.diff(np.asarray(mask, dtype=np.float),
                                            axis=1), axis=1), dtype=np.float)
+
+    # 0.0 means edge at left or edge not found, replace with NaN
     xcoords[xcoords == 0.0] = np.nan
-    xcoords[np.isnan(xcoords)] = np.nanmean(xcoords)
 
     # +0.5 to get the correct pixel position
     xcoords = xcoords + 0.5
