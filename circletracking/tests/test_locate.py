@@ -30,7 +30,7 @@ class TestFits(RepeatedUnitTests, unittest.TestSuite):
         radius_fit, center_fit, _ = fit_ellipse(points, mode='xy')
 
         return np.concatenate([radius_fit, center_fit]), \
-            np.concatenate([radius, center])
+               np.concatenate([radius, center])
 
 
     @repeat_test_std
@@ -46,7 +46,7 @@ class TestFits(RepeatedUnitTests, unittest.TestSuite):
         radius_fit, center_fit, _ = fit_ellipse(points, mode='xy')
 
         return np.concatenate([radius_fit, center_fit]), \
-            np.concatenate([radius, center])
+               np.concatenate([radius, center])
 
 
     @repeat_test_std
@@ -62,7 +62,7 @@ class TestFits(RepeatedUnitTests, unittest.TestSuite):
         radius_fit, center_fit, _ = fit_ellipse(points, mode='0')
 
         return np.concatenate([radius_fit, center_fit]), \
-            np.concatenate([radius, center])
+               np.concatenate([radius, center])
 
 
     @repeat_test_std
@@ -78,7 +78,7 @@ class TestFits(RepeatedUnitTests, unittest.TestSuite):
         radius_fit, center_fit, _ = fit_ellipse(points, mode='0')
 
         return np.concatenate([radius_fit, center_fit]), \
-            np.concatenate([radius, center])
+               np.concatenate([radius, center])
 
     #
     # def test_fit_ellipse(self):
@@ -99,10 +99,10 @@ class TestFits(RepeatedUnitTests, unittest.TestSuite):
     #     points += center[:, np.newaxis]
     #     #points += (np.random.random(points.shape) - 0.5) * noise
 
-    # radius_fit, center_fit, angle_fit = gt.fit_ellipse(points, mode='')
-    # assert_allclose(radius, radius_fit, atol=0.1)
-    # assert_allclose(center, center_fit, atol=0.1)
-    # assert_allclose(angle, angle_fit, atol=0.1)
+        # radius_fit, center_fit, angle_fit = gt.fit_ellipse(points, mode='')
+        # assert_allclose(radius, radius_fit, atol=0.1)
+        # assert_allclose(center, center_fit, atol=0.1)
+        # assert_allclose(angle, angle_fit, atol=0.1)
 
     @repeat_test_std
     def test_fit_ellipsoid_straight(self):
@@ -116,7 +116,7 @@ class TestFits(RepeatedUnitTests, unittest.TestSuite):
         radius_fit, center_fit, _ = fit_ellipsoid(points, mode='0')
 
         return np.concatenate([radius_fit, center_fit]), \
-            np.concatenate([radius, center])
+               np.concatenate([radius, center])
 
 
     @repeat_test_std
@@ -133,7 +133,7 @@ class TestFits(RepeatedUnitTests, unittest.TestSuite):
         radius_fit, center_fit, _ = fit_ellipsoid(points, mode='0')
 
         return np.concatenate([radius_fit, center_fit]), \
-            np.concatenate([radius, center])
+               np.concatenate([radius, center])
 
     # def test_fit_ellipsoid_rotated(self):
     #     noise = 0.2
@@ -219,7 +219,7 @@ class TestFits(RepeatedUnitTests, unittest.TestSuite):
         result = fit_ellipsoid(points, mode='xy', return_mode='skew')
 
         return np.concatenate(result), \
-            np.concatenate([radius, center, skew])
+               np.concatenate([radius, center, skew])
 
     @repeat_test_std
     def test_fit_ellipsoid_skewed_noisy(self):
@@ -253,7 +253,7 @@ class TestFits(RepeatedUnitTests, unittest.TestSuite):
         result = fit_ellipsoid(points, mode='xy', return_mode='skew')
 
         return np.concatenate(result), \
-            np.concatenate([radius, center, skew])
+               np.concatenate([radius, center, skew])
 
 
 class TestEllipse(RepeatedUnitTests, unittest.TestSuite):
@@ -289,7 +289,7 @@ class TestEllipse(RepeatedUnitTests, unittest.TestSuite):
         result, _ = locate_ellipse(im)
 
         return result[['yr', 'xr', 'yc', 'xc']].values, \
-            np.concatenate([radius, center])
+               np.concatenate([radius, center])
 
     @repeat_test_std
     def test_ellipse_noisy(self):
@@ -304,7 +304,7 @@ class TestEllipse(RepeatedUnitTests, unittest.TestSuite):
                           FWHM=self.FWHM, noise=noise)
         result, _ = locate_ellipse(im)
         return result[['yr', 'xr', 'yc', 'xc']].values, \
-            np.concatenate([radius, center])
+               np.concatenate([radius, center])
 
 
 class TestEllipsoid(RepeatedUnitTests, unittest.TestSuite):
@@ -340,7 +340,7 @@ class TestEllipsoid(RepeatedUnitTests, unittest.TestSuite):
                             FWHM=self.FWHM, noise=0.02)
         result, _ = locate_ellipsoid_fast(im)
         return result[['zr', 'yr', 'xr', 'zc', 'yc', 'xc']].values, \
-            np.concatenate([radius, center])
+               np.concatenate([radius, center])
 
     @repeat_test_std
     def test_locate_noisy(self):
@@ -350,7 +350,7 @@ class TestEllipsoid(RepeatedUnitTests, unittest.TestSuite):
                             FWHM=self.FWHM, noise=0.2)
         result, _ = locate_ellipsoid(im)
         return result[['zr', 'yr', 'xr', 'zc', 'yc', 'xc']].values, \
-            np.concatenate([radius, center])
+               np.concatenate([radius, center])
 
 
 if __name__ == '__main__':
