@@ -14,17 +14,18 @@ class TestDisks(RepeatedUnitTests, unittest.TestCase):
     repeats = 20
     names = ('radius', 'y_coord', 'x_coord')
 
-    def generate_image(self, n, noise=0.02):
+    def generate_image(self, n=1, noise=0.02, shape=(300, 300),
+                       radius_range=(15, 30)):
         """ Generate the test image """
-        radius = np.random.uniform(15, 30)
-        image = SimulatedImage(shape=(300, 300), radius=radius,
+        radius = np.random.uniform(*radius_range)
+        image = SimulatedImage(shape=shape, radius=radius,
                                noise=noise)
-        image.draw_features(n, margin=2*radius, separation=2*radius + 2)
+        image.draw_features(n, margin=2 * radius, separation=2 * radius + 2)
         return image
 
     def find_or_locate_single(self, noise=0.02, mode='find'):
         """ Find single particles, with optional noise """
-        im = self.generate_image(1, noise=noise)
+        im = self.generate_image(n=1, noise=noise)
 
         if mode == 'find':
             fits = find_disks(im.image, (im.radius / 2.0,
@@ -45,7 +46,7 @@ class TestDisks(RepeatedUnitTests, unittest.TestCase):
 
     def find_or_locate_multiple(self, noise=0.02, mode='find'):
         """ Find multiple particles, with optional noise """
-        im = self.generate_image(10, noise=noise)
+        im = self.generate_image(n=10, noise=noise)
         actual_number = len(im.coords)
 
         if mode == 'find':
@@ -69,6 +70,16 @@ class TestDisks(RepeatedUnitTests, unittest.TestCase):
 
         expected = np.array([np.full(actual_number, im.radius, np.float64),
                              coords[:, 0], coords[:, 1]]).T
+
+        if False and mode == 'locate':
+            import matplotlib.pyplot as plt
+            _imshow_style = dict(origin='lower', interpolation='none',
+                                 cmap=plt.cm.gray)
+            plt.imshow(im.image, **_imshow_style)
+            for i in actual:
+                plt.gca().add_patch(plt.Circle((i[2], i[1]), radius=i[0],
+                                               fc='None', ec='b', ls='solid'))
+            plt.show()
 
         return np.sqrt(((actual - expected)**2).mean(0)), [0] * 3
 
@@ -111,13 +122,13 @@ class TestDisks(RepeatedUnitTests, unittest.TestCase):
     @repeat_test_std
     def test_locate_multiple(self):
         """ Test locating multiple particles """
-        self.atol = 0.5
+        self.atol = 1.0
         return self.find_or_locate_multiple(noise=0.02, mode='locate')
 
     @repeat_test_std
     def test_locate_multiple_noisy(self):
         """ Test locating multiple particles (noisy) """
-        self.atol = 0.5
+        self.atol = 1.0
         return self.find_or_locate_multiple(noise=0.2, mode='locate')
 
 if __name__ == '__main__':

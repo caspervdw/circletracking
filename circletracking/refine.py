@@ -68,23 +68,23 @@ def fit_max_2d(arr, maxfit_size=2, threshold=0.1):
 def refine_disks(image, blobs, num_points_circle=100):
     """ Refine multiple Hough detected blobs """
     if blobs is None:
-        return pd.DataFrame(colums=['r', 'y', 'x'], data=[np.nan] * 3)
+        return pd.DataFrame(colums=['r', 'y', 'x'])
 
     result = blobs.copy()
     result.drop('accum', axis=1, inplace=True)
     for i in result.index:
         fit = fit_edge_2d(image, blobs.loc[i],
                           num_points_circle=num_points_circle)
-        if fit is None:
-            result.loc[i, ['r', 'y', 'x']] = np.nan
-        else:
+        # This is a refinement function, only refine if successfull,
+        # otherwise use the original fit
+        if fit is not None:
             result.loc[i, ['r', 'y', 'x']] = fit[0], fit[2], fit[3]
     return result
 
 
 def fit_edge_2d(image, params, threshold=None, num_points_circle=100):
     """ Find a circle based on the blob """
-    rad_range = (-params.r / 2, params.r / 2)
+    rad_range = (-params.r, params.r)
 
     # Get intensity in spline representation
     coords = (params.r, params.r, params.y, params.x)
@@ -133,6 +133,13 @@ def find_edge(intensity):
     # Try to interpolate missing x values
     coords_df = coords_df.interpolate(method='nearest', axis=0).ffill().bfill()
 
+    # Now remove outliers which can result from particles being close together
+    if coords_df.x.std() > 2.0:
+        # First make them nan
+        coords_df[(np.abs(coords_df.x-coords_df.x.mean()) > 5.0)] = np.nan
+        # Then fill with new mean
+        coords_df.fillna(coords_df.x.mean(skipna=True), inplace=True)
+
     return coords_df['x'].values
 
 
@@ -148,12 +155,15 @@ def create_binary_mask(intensity, threshold=None):
 
 
 def check_intensity_interpolation(intensity, threshold=None):
-    """ Check whether the intensity interpolation is bright on left, dark on right """
+    """
+    Check whether the intensity interpolation is bright on left,
+    dark on right
+    """
     binary_mask = create_binary_mask(intensity, threshold)
     parts = np.array_split(binary_mask, 2, axis=1)
     mean_left = np.mean(parts[0])
     mean_right = np.mean(parts[1])
-    return mean_left > 0.8 and mean_right < 0.2
+    return mean_left > mean_right
 
 
 def get_intensity_interpolation(image, params, rad_range, num_points,
