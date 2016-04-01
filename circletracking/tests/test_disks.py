@@ -5,7 +5,7 @@ import nose
 import numpy as np
 import unittest
 from circletracking import (SimulatedImage, find_disks, locate_disks)
-from circletracking.tests.common import (RepeatedUnitTests, repeat_test_std,
+from circletracking.tests.common import (RepeatedUnitTests, repeat_check_std,
                                          sort_positions)
 
 
@@ -42,6 +42,9 @@ class TestDisks(RepeatedUnitTests, unittest.TestCase):
         else:
             r, x, y = fits[['r', 'x', 'y']].values[0]
 
+        if mode == 'locate':
+            assert fits.refined.all()
+
         return (r, y, x), (im.radius, y_coord, x_coord)
 
     def find_or_locate_multiple(self, noise=0.02, mode='find'):
@@ -71,64 +74,57 @@ class TestDisks(RepeatedUnitTests, unittest.TestCase):
         expected = np.array([np.full(actual_number, im.radius, np.float64),
                              coords[:, 0], coords[:, 1]]).T
 
-        if False and mode == 'locate':
-            import matplotlib.pyplot as plt
-            _imshow_style = dict(origin='lower', interpolation='none',
-                                 cmap=plt.cm.gray)
-            plt.imshow(im.image, **_imshow_style)
-            for i in actual:
-                plt.gca().add_patch(plt.Circle((i[2], i[1]), radius=i[0],
-                                               fc='None', ec='b', ls='solid'))
-            plt.show()
+        if mode == 'locate':
+            assert fits.refined.all()
 
         return np.sqrt(((actual - expected)**2).mean(0)), [0] * 3
 
-    @repeat_test_std
+    @repeat_check_std
     def test_find_single(self):
         """ Test finding single particle """
         self.atol = 5
         return self.find_or_locate_single(noise=0.02, mode='find')
 
-    @repeat_test_std
+    @repeat_check_std
     def test_find_single_noisy(self):
         """ Test find single noisy particle """
         self.atol = 5
         return self.find_or_locate_single(noise=0.2, mode='find')
 
-    @repeat_test_std
+    @repeat_check_std
     def test_find_multiple(self):
         """ Test finding multiple particles """
         self.atol = 5
         return self.find_or_locate_multiple(noise=0.02, mode='find')
 
-    @repeat_test_std
+    @repeat_check_std
     def test_find_multiple_noisy(self):
         """ Test finding multiple particles (noisy) """
         self.atol = 5
         return self.find_or_locate_multiple(noise=0.2, mode='find')
 
-    @repeat_test_std
+    @repeat_check_std
     def test_locate_single(self):
         """ Test locating single particle """
         self.atol = 0.5
         return self.find_or_locate_single(noise=0.02, mode='locate')
 
-    @repeat_test_std
+    @repeat_check_std
     def test_locate_single_noisy(self):
         """ Test locating single particle (noisy) """
         self.atol = 0.5
         return self.find_or_locate_single(noise=0.2, mode='locate')
 
-    @repeat_test_std
+    @repeat_check_std
     def test_locate_multiple(self):
         """ Test locating multiple particles """
-        self.atol = 1.0
+        self.atol = 0.5
         return self.find_or_locate_multiple(noise=0.02, mode='locate')
 
-    @repeat_test_std
+    @repeat_check_std
     def test_locate_multiple_noisy(self):
         """ Test locating multiple particles (noisy) """
-        self.atol = 1.0
+        self.atol = 0.5
         return self.find_or_locate_multiple(noise=0.2, mode='locate')
 
 if __name__ == '__main__':

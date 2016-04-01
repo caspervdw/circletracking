@@ -72,6 +72,7 @@ def refine_disks(image, blobs, num_points_circle=100):
 
     result = blobs.copy()
     result.drop('accum', axis=1, inplace=True)
+    result['refined'] = True
     for i in result.index:
         fit = fit_edge_2d(image, blobs.loc[i],
                           num_points_circle=num_points_circle)
@@ -79,6 +80,9 @@ def refine_disks(image, blobs, num_points_circle=100):
         # otherwise use the original fit
         if fit is not None:
             result.loc[i, ['r', 'y', 'x']] = fit[0], fit[2], fit[3]
+        else:
+            result.loc[i, ['refined']] = False
+
     return result
 
 
@@ -115,32 +119,16 @@ def find_edge(intensity):
     """ Find the edge of the particle """
     mask = create_binary_mask(intensity)
 
-    # Take last x coord of left list, first x coord of right list and take y
-    coords = [(([i for i, l in enumerate(row) if l][-1] +
-                [j for j, r in enumerate(row) if not r][0]) / 2.0, y) for
-              y, row in enumerate(mask) if True in row and False in row]
-    coords_df = pd.DataFrame(columns=['x', 'y'], data=coords)
+    # Take first falling edge where np.diff == -1
+    xcoords = np.asarray(np.argmin(np.diff(np.asarray(mask, dtype=np.float),
+                                           axis=1), axis=1), dtype=np.float)
+    xcoords[xcoords == 0.0] = np.nan
+    xcoords[np.isnan(xcoords)] = np.nanmean(xcoords)
 
-    # Set the index
-    coords_df = coords_df.set_index('y', drop=False, verify_integrity=False)
+    # +0.5 to get the correct pixel position
+    xcoords = xcoords + 0.5
 
-    # Generate index of all y values of intensity array
-    index = np.arange(0, intensity.shape[0], 1)
-
-    # Reindex with all y values, filling with NaN's
-    coords_df = coords_df.reindex(index, fill_value=np.nan)
-
-    # Try to interpolate missing x values
-    coords_df = coords_df.interpolate(method='nearest', axis=0).ffill().bfill()
-
-    # Now remove outliers which can result from particles being close together
-    if coords_df.x.std() > 2.0:
-        # First make them nan
-        coords_df[(np.abs(coords_df.x-coords_df.x.mean()) > 5.0)] = np.nan
-        # Then fill with new mean
-        coords_df.fillna(coords_df.x.mean(skipna=True), inplace=True)
-
-    return coords_df['x'].values
+    return xcoords
 
 
 def create_binary_mask(intensity, threshold=None):

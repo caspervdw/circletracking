@@ -19,7 +19,7 @@ def assert_coordinates_close(actual, expected, atol):
     assert_allclose(sorted_actual, expected, atol)
 
 
-def repeat_test_std(func):
+def repeat_check_std(func):
     @wraps(func)
     def wrapper(test_obj, *args, **kwargs):
         global result_table

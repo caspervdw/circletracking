@@ -9,7 +9,7 @@ from circletracking import (ellipse_grid, ellipsoid_grid, locate_ellipse,
                             fit_ellipsoid, find_ellipsoid, find_ellipse,
                             locate_ellipsoid, locate_ellipsoid_fast,
                             SimulatedImage, find_disks, locate_disks)
-from circletracking.tests.common import (RepeatedUnitTests, repeat_test_std,
+from circletracking.tests.common import (RepeatedUnitTests, repeat_check_std,
                                          sort_positions)
 
 
@@ -17,7 +17,7 @@ class TestFits(RepeatedUnitTests, unittest.TestSuite):
     repeats = 100
     names = ('radius_y', 'radius_x', 'center_y', 'center_x')
 
-    @repeat_test_std
+    @repeat_check_std
     def test_fit_circle(self):
         self.atol = 1E-7
         noise = 0
@@ -33,7 +33,7 @@ class TestFits(RepeatedUnitTests, unittest.TestSuite):
                np.concatenate([radius, center])
 
 
-    @repeat_test_std
+    @repeat_check_std
     def test_fit_circle_noisy(self):
         self.atol = [0.15, 0.15, 0.2, 0.2]
         noise = 0.2
@@ -49,7 +49,7 @@ class TestFits(RepeatedUnitTests, unittest.TestSuite):
                np.concatenate([radius, center])
 
 
-    @repeat_test_std
+    @repeat_check_std
     def test_fit_ellipse_straight(self):
         self.atol = 1E-7
         noise = 0
@@ -65,7 +65,7 @@ class TestFits(RepeatedUnitTests, unittest.TestSuite):
                np.concatenate([radius, center])
 
 
-    @repeat_test_std
+    @repeat_check_std
     def test_fit_ellipse_straight_noisy(self):
         self.atol = [0.15, 0.15, 0.2, 0.2]
         noise = 0.2
@@ -104,7 +104,7 @@ class TestFits(RepeatedUnitTests, unittest.TestSuite):
         # assert_allclose(center, center_fit, atol=0.1)
         # assert_allclose(angle, angle_fit, atol=0.1)
 
-    @repeat_test_std
+    @repeat_check_std
     def test_fit_ellipsoid_straight(self):
         self.names = ('radius_z', 'radius_y', 'radius_x',
                       'center_z', 'center_y', 'center_x')
@@ -119,7 +119,7 @@ class TestFits(RepeatedUnitTests, unittest.TestSuite):
                np.concatenate([radius, center])
 
 
-    @repeat_test_std
+    @repeat_check_std
     def test_fit_ellipsoid_straight_noisy(self):
         self.names = ('radius_z', 'radius_y', 'radius_x',
                       'center_z', 'center_y', 'center_x')
@@ -189,7 +189,7 @@ class TestFits(RepeatedUnitTests, unittest.TestSuite):
     #     assert_allclose(center, result[1], atol=0.1)
 
 
-    @repeat_test_std
+    @repeat_check_std
     def test_fit_ellipsoid_skewed(self):
         self.names = ('radius_z', 'radius_y', 'radius_x',
                       'center_z', 'center_y', 'center_x',
@@ -221,7 +221,7 @@ class TestFits(RepeatedUnitTests, unittest.TestSuite):
         return np.concatenate(result), \
                np.concatenate([radius, center, skew])
 
-    @repeat_test_std
+    @repeat_check_std
     def test_fit_ellipsoid_skewed_noisy(self):
         self.names = ('radius_z', 'radius_y', 'radius_x',
                       'center_z', 'center_y', 'center_x',
@@ -261,7 +261,7 @@ class TestEllipse(RepeatedUnitTests, unittest.TestSuite):
     shape = (300, 300)
     FWHM = 5
     names = ('radius_y', 'radius_x', 'center_y', 'center_x')
-    @repeat_test_std
+    @repeat_check_std
     def test_circle_no_refine(self):
         self.atol = [1, 1, 0.1, 0.1]
         noise = 0.02
@@ -275,7 +275,7 @@ class TestEllipse(RepeatedUnitTests, unittest.TestSuite):
 
         return result, np.concatenate([radius, center])
 
-    @repeat_test_std
+    @repeat_check_std
     def test_circle_noisy(self):
         self.atol = [None, None, 0.1, 0.1]
         self.rtol = [0.01, 0.01, None, None]
@@ -291,7 +291,7 @@ class TestEllipse(RepeatedUnitTests, unittest.TestSuite):
         return result[['yr', 'xr', 'yc', 'xc']].values, \
                np.concatenate([radius, center])
 
-    @repeat_test_std
+    @repeat_check_std
     def test_ellipse_noisy(self):
         self.atol = [None, None, 0.1, 0.1]
         self.rtol = [0.01, 0.01, None, None]
@@ -323,7 +323,7 @@ class TestEllipsoid(RepeatedUnitTests, unittest.TestSuite):
                         for (s, p) in zip(self.shape, padding)])
         return center, radius
 
-    @repeat_test_std
+    @repeat_check_std
     def test_no_refine_noisy(self):
         self.atol = [5, 5, 5, 1, 1, 1]
         center, radius = self.gen_center_radius()
@@ -332,7 +332,7 @@ class TestEllipsoid(RepeatedUnitTests, unittest.TestSuite):
         result = find_ellipsoid(im)
         return result, radius + center
 
-    @repeat_test_std
+    @repeat_check_std
     def test_locate_fast(self):
         self.atol = [0.2, 0.1, 0.1, 0.1, 0.1, 0.1]
         center, radius = self.gen_center_radius()
@@ -342,7 +342,7 @@ class TestEllipsoid(RepeatedUnitTests, unittest.TestSuite):
         return result[['zr', 'yr', 'xr', 'zc', 'yc', 'xc']].values, \
                np.concatenate([radius, center])
 
-    @repeat_test_std
+    @repeat_check_std
     def test_locate_noisy(self):
         self.atol = [1, 0.5, 0.5, 0.1, 0.1, 0.1]
         center, radius = self.gen_center_radius()
