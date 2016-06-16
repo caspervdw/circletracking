@@ -138,12 +138,15 @@ def locate_ellipsoid(frame, spacing=1, rad_range=None, maxfit_size=2,
     return pd.Series(params, index=columns), r
 
 
-def locate_disks(image, size_range, number_of_disks=100, number_of_points=100):
+def locate_disks(image, size_range, number_of_disks=100,
+                 rad_range=None, threshold=0.5, max_dev=1):
     """ Find circular particles in the image """
     blobs = find_disks(image, size_range, number_of_disks)
 
     if blobs.empty:
         return pd.DataFrame(columns=['r', 'y', 'x', 'dev'])
 
-    return refine_disks(image, blobs, number_of_points)
-
+    result = refine_disks(image, blobs, rad_range, threshold, max_dev)
+    result = result.dropna()
+    result.reset_index(drop=True, inplace=True)
+    return result

@@ -14,7 +14,7 @@ import pandas as pd
 
 from .algebraic import (ellipse_grid, ellipsoid_grid, fit_ellipse,
                         fit_ellipsoid)
-
+from clustertracking.masks import slice_image, binary_mask_multiple
 
 def fit_max_2d(arr, maxfit_size=2, threshold=0.1):
     """ Finds the maxima along axis 0 using linear regression of the
@@ -65,21 +65,31 @@ def fit_max_2d(arr, maxfit_size=2, threshold=0.1):
     return r_dev + maxes
 
 
-def refine_disks(image, blobs, num_points_circle=100):
+def refine_disks(image, blobs, rad_range=None, threshold=0.5, max_dev=1):
     """ Refine multiple Hough detected blobs """
     result = blobs.copy()
+    if 'accum' in result:
+        del result['accum']
+    result['mass'] = np.nan
     for i in result.index:
-        fit, _ = fit_edge_2d(image, blobs.loc[i],
-                             num_points_circle=num_points_circle)
+        fit, _ = fit_edge_2d(image, blobs.loc[i], rad_range, threshold,
+                             max_dev)
         if fit is None:
             result.loc[i, ['r', 'y', 'x']] = np.nan
-        else:
-            result.loc[i, ['r', 'y', 'x']] = fit[0], fit[2], fit[3]
+            continue
+
+        r, _, yc, xc = fit
+        result.loc[i, ['r', 'y', 'x']] = r, yc, xc
+        coords = np.array([(yc, xc)])
+        square, origin = slice_image(coords, image, r+1)
+        mask = binary_mask_multiple(coords - origin, square.shape, r)
+        result.loc[i, 'mass'] = square[mask].sum()
+        result.loc[i, 'signal'] = result.loc[i, 'mass'] / mask.sum()
+
     return result
 
 
-def fit_edge_2d(image, params, rad_range=None, threshold=None,
-                num_points_circle=100):
+def fit_edge_2d(image, params, rad_range=None, threshold=0.5, max_dev=1):
     """ Find a circle based on the blob """
     if rad_range is None:
         rad_range = (-params.r / 2, params.r / 2)
@@ -87,16 +97,15 @@ def fit_edge_2d(image, params, rad_range=None, threshold=None,
     # Get intensity in spline representation
     coords = (params.r, params.r, params.y, params.x)
     intensity, pos, normal = get_intensity_interpolation(image, coords,
-                                                         rad_range,
-                                                         num_points_circle)
+                                                         rad_range)
 
-    if not check_intensity_interpolation(intensity, threshold):
+    # Check whether the intensity interpolation is bright on left, dark on right
+    if np.mean(intensity[:, 0]) < 2 * np.mean(intensity[:, -1]):
         return None, None
 
     # Find the coordinates of the edge
-    r_dev = find_edge(intensity)
-
-    if np.isnan(r_dev).any():
+    r_dev = find_edge(intensity, threshold)
+    if np.sum(np.isnan(r_dev)) / len(r_dev) > 0.5:
         return None, None
 
     # Set outliers to mean of rest of x coords
@@ -106,37 +115,36 @@ def fit_edge_2d(image, params, rad_range=None, threshold=None,
     coord_new = mapped_coords_to_normal_coords(pos, r_dev, rad_range, normal)
 
     # Fit the circle
-    radius, center, _ = fit_ellipse(coord_new, mode='xy')
+    (radius, _), (yc, xc), _ = fit_ellipse(coord_new, mode='xy')
+    if np.any(np.isnan([radius, yc, xc])):
+        return None, None
+    if not rad_range[0] < radius - params.r < rad_range[1]:
+        return None, None
 
-    return tuple(radius) + tuple(center), coord_new.T
+    # calculate deviations from circle
+    y, x = coord_new
+    deviations2 = (np.sqrt((xc - x)**2 + (yc - y)**2) - radius)**2
+    mask = deviations2 < max_dev**2
+    if np.sum(mask) / len(mask) < 0.5:
+        return None, None
+
+    if np.any(~mask):
+        (radius, _), (yc, xc), _ = fit_ellipse(coord_new[:, mask], mode='xy')
+        if np.any(np.isnan([radius, yc, xc])):
+            return None, None
+
+    return (radius, radius, yc, xc), coord_new.T
 
 
-def find_edge(intensity):
-    """ Find the edge of the particle """
-    mask = create_binary_mask(intensity)
-
-    # Take last x coord of left list, first x coord of right list and take y
-    coords = [(([i for i, l in enumerate(row) if l][-1] +
-                [j for j, r in enumerate(row) if not r][0]) / 2.0, y) for
-              y, row in enumerate(mask) if True in row and False in row]
-    coords_df = pd.DataFrame(columns=['x', 'y'], data=coords)
-
-    # Set the index
-    coords_df = coords_df.set_index('y', drop=False, verify_integrity=False)
-
-    # Generate index of all y values of intensity array
-    index = np.arange(0, intensity.shape[0], 1)
-
-    # Reindex with all y values, filling with NaN's
-    coords_df = coords_df.reindex(index, fill_value=np.nan)
-
-    # Try to interpolate missing x values
-    coords_df = coords_df.interpolate(method='nearest', axis=0).ffill().bfill()
-
-    # Instead of returning x,y dataframe, return deviations from center
-    r_dev = coords_df['x'] - (intensity.shape[1] / 2.0)
-
-    return r_dev.values
+def find_edge(intensity, threshold=0.5):
+    """ Find strongest decreasing edge on each row """
+    derivative = -1*np.diff(intensity.astype(np.int))
+    index = np.argmax(derivative, axis=1)
+    values = np.array([derivative[i, index[i]] for i in range(len(derivative))],
+                      dtype=intensity.dtype)
+    r_dev = index + 0.5
+    r_dev[values < threshold * values.max()] = np.nan
+    return r_dev
 #
 #
 # def remove_outliers(edge_coords):
@@ -150,27 +158,18 @@ def find_edge(intensity):
 #     return edge_coords.x.values
 
 
-def create_binary_mask(intensity, threshold=None):
-    if threshold is None:
-        threshold = threshold_otsu(intensity)
-    mask = intensity > threshold
-
-    # Fill holes in binary mask
-    mask = scipy.ndimage.morphology.binary_fill_holes(mask)
-
-    return mask
-
-
-def check_intensity_interpolation(intensity, threshold=None):
-    """ Check whether the intensity interpolation is bright on left, dark on right """
-    binary_mask = create_binary_mask(intensity, threshold)
-    parts = np.array_split(binary_mask, 2, axis=1)
-    mean_left = np.mean(parts[0])
-    mean_right = np.mean(parts[1])
-    return mean_left > 0.8 and mean_right < 0.2
+# def create_binary_mask(intensity, threshold=None):
+#     if threshold is None:
+#         threshold = threshold_otsu(intensity)
+#     mask = intensity > threshold
+#
+#     # Fill holes in binary mask
+#     mask = scipy.ndimage.morphology.binary_fill_holes(mask)
+#
+#     return mask
 
 
-def get_intensity_interpolation(image, params, rad_range, num_points,
+def get_intensity_interpolation(image, params, rad_range, num_points=None,
                                 spline_order=3):
     """ Generate the intensity interpolation used for edge finding """
     yr, xr, yc, xc = params

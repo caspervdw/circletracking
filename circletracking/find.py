@@ -18,7 +18,7 @@ from skimage.transform import hough_circle
 from skimage.feature import peak_local_max
 import pandas as pd
 from scipy.spatial import cKDTree
-
+from trackpy import bandpass
 from .algebraic import fit_ellipse
 
 def find_disks(image, size_range, number_of_disks=100):
@@ -28,20 +28,27 @@ def find_disks(image, size_range, number_of_disks=100):
     # Take a maximum of 30 intermediate steps
     step = max(int(round(abs(size_range[1] - size_range[0]) / 30)), 1)
     radii = np.arange(size_range[0], size_range[1], step=step, dtype=np.intp)
+    mean_radius = (size_range[0] + size_range[1])  /2
 
     # Find edges
-    edges = canny(image)
+    image = bandpass(image, 1, int(mean_radius*2 + 1))
+    edges = canny(image, sigma=mean_radius/2)
     circles = hough_circle(edges, radii)
 
     fit = []
     for radius, circle in zip(radii, circles):
         peaks = peak_local_max(circle, threshold_rel=0.5,
                                num_peaks=number_of_disks)
-        accumulator = circle[peaks[:, 0], peaks[:, 1]]
+        try:
+            accumulator = circle[peaks[:, 0], peaks[:, 1]]
+        except TypeError:
+            continue
         fit.append(pd.DataFrame(dict(r=[radius] * peaks.shape[0],
                                      y=peaks[:, 0],
                                      x=peaks[:, 1],
                                      accum=accumulator)))
+    if len(fit) == 0:
+        return pd.DataFrame(columns=['r', 'y', 'x', 'accum'])
     fit = pd.concat(fit, ignore_index=True)
     fit = merge_hough_same_values(fit, number_of_disks)
     return fit
