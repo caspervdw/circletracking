@@ -18,27 +18,27 @@ from skimage.transform import hough_circle
 from skimage.feature import peak_local_max
 import pandas as pd
 from scipy.spatial import cKDTree
-from trackpy import bandpass
 from .algebraic import fit_ellipse
 
-def find_disks(image, size_range, number_of_disks=100):
-    """ Locate blobs in the image by using a Laplacian of Gaussian method """
-    number_of_disks = int(np.round(number_of_disks))
 
+def find_disks(image, size_range, number_of_disks=100, canny_sigma=None):
+    """ Locate blobs in the image by using a Laplacian of Gaussian method """
     # Take a maximum of 30 intermediate steps
     step = max(int(round(abs(size_range[1] - size_range[0]) / 30)), 1)
     radii = np.arange(size_range[0], size_range[1], step=step, dtype=np.intp)
     mean_radius = (size_range[0] + size_range[1])  /2
 
+    if canny_sigma is None:
+        canny_sigma = mean_radius/2
+
     # Find edges
-    image = bandpass(image, 1, int(mean_radius*2 + 1))
-    edges = canny(image, sigma=mean_radius/2)
+    edges = canny(image, sigma=canny_sigma)
     circles = hough_circle(edges, radii)
 
     fit = []
     for radius, circle in zip(radii, circles):
         peaks = peak_local_max(circle, threshold_rel=0.5,
-                               num_peaks=number_of_disks)
+                               num_peaks=int(number_of_disks))
         try:
             accumulator = circle[peaks[:, 0], peaks[:, 1]]
         except TypeError:

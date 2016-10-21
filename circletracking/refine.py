@@ -14,7 +14,7 @@ import pandas as pd
 
 from .algebraic import (ellipse_grid, ellipsoid_grid, fit_ellipse,
                         fit_ellipsoid)
-from clustertracking.masks import slice_image, binary_mask_multiple
+from .masks import slice_image, binary_mask_multiple
 
 def fit_max_2d(arr, maxfit_size=2, threshold=0.1):
     """ Finds the maxima along axis 0 using linear regression of the
@@ -71,6 +71,7 @@ def refine_disks(image, blobs, rad_range=None, threshold=0.5, max_dev=1):
     if 'accum' in result:
         del result['accum']
     result['mass'] = np.nan
+    result['signal'] = np.nan
     for i in result.index:
         fit, _ = fit_edge_2d(image, blobs.loc[i], rad_range, threshold,
                              max_dev)
@@ -82,6 +83,8 @@ def refine_disks(image, blobs, rad_range=None, threshold=0.5, max_dev=1):
         result.loc[i, ['r', 'y', 'x']] = r, yc, xc
         coords = np.array([(yc, xc)])
         square, origin = slice_image(coords, image, r+1)
+        if origin is None:  # outside of image
+            continue
         mask = binary_mask_multiple(coords - origin, square.shape, r)
         result.loc[i, 'mass'] = square[mask].sum()
         result.loc[i, 'signal'] = result.loc[i, 'mass'] / mask.sum()
@@ -115,7 +118,10 @@ def fit_edge_2d(image, params, rad_range=None, threshold=0.5, max_dev=1):
     coord_new = mapped_coords_to_normal_coords(pos, r_dev, rad_range, normal)
 
     # Fit the circle
-    (radius, _), (yc, xc), _ = fit_ellipse(coord_new, mode='xy')
+    try:
+        (radius, _), (yc, xc), _ = fit_ellipse(coord_new, mode='xy')
+    except np.linalg.LinAlgError:
+        return None, None
     if np.any(np.isnan([radius, yc, xc])):
         return None, None
     if not rad_range[0] < radius - params.r < rad_range[1]:
@@ -129,7 +135,11 @@ def fit_edge_2d(image, params, rad_range=None, threshold=0.5, max_dev=1):
         return None, None
 
     if np.any(~mask):
-        (radius, _), (yc, xc), _ = fit_ellipse(coord_new[:, mask], mode='xy')
+        try:
+            (radius, _), (yc, xc), _ = fit_ellipse(coord_new[:, mask],
+                                                   mode='xy')
+        except np.linalg.LinAlgError:
+            return None, None
         if np.any(np.isnan([radius, yc, xc])):
             return None, None
 
