@@ -10,193 +10,66 @@ try:
     from skimage.filters import threshold_otsu
 except ImportError:
     from skimage.filter import threshold_otsu  # skimage <= 0.10
-import pandas as pd
 
 from .algebraic import (ellipse_grid, ellipsoid_grid, fit_ellipse,
-                        fit_ellipsoid)
-from .masks import slice_image, binary_mask_multiple
+                        fit_ellipsoid, max_linregress, max_edge)
+from .masks import slice_image, get_mask
 
-def fit_max_2d(arr, maxfit_size=2, threshold=0.1):
-    """ Finds the maxima along axis 0 using linear regression of the
-    difference list.
+
+def unwrap_ellipse(image, params, rad_range, num_points=None, spline_order=3):
+    """ Unwraps an circular or ellipse-shaped feature into elliptic coordinates.
+
+    Transforms an image in (y, x) space to (theta, r) space, using elliptic
+    coordinates. The theta coordinate is tangential to the ellipse, the r
+    coordinate is normal to the ellipse. r=0 at the ellipse: inside the ellipse,
+    r < 0.
 
     Parameters
     ----------
-    arr : numpy array
-    maxfit_size : integer, optional
-        defines the fitregion around the maximum value:
-        range(argmax - maxfit_size, argmax + maxfitsize + 1). Default 2.
-    threshold :
-        discard points when the mean of the fitregion < threshold * global max
+    image : ndarray, 2d
+    params : (yr, xr, yc, xc)
+    rad_range : tuple
+        A tuple defining the range of r to interpolate.
+    num_points : number, optional
+        The number of ``theta`` values. By default, this equals the
+        ellipse circumference: approx. every pixel there is an interpolation.
+    spline_order : number, optional
+        The order of the spline interpolation. Default 3.
 
     Returns
     -------
-    1D array with locations of maxima.
-    Elements are NaN in all of the following cases:
-     - any pixel in the fitregion is 0
-     - the mean of the fitregion < threshold * global max
-     - regression returned infinity
-     - maximum is outside of the fit region.
+    intensity : the interpolated image in (theta, r) space
+    pos : the (y, x) positions of the ellipse grid
+    normal : the (y, x) unit vectors normal to the ellipse grid
     """
-    # identify the regions around the max value
-    maxes = np.argmax(arr[:, maxfit_size:-maxfit_size],
-                      axis=1) + maxfit_size
-    ind = maxes[:, np.newaxis] + range(-maxfit_size, maxfit_size+1)
-    fitregion = np.array([_int.take(_ind) for _int, _ind in zip(arr, ind)],
-                         dtype=np.int32)
-
-    # fit max using linear regression
-    intdiff = np.diff(fitregion, 1)
-    # is normed because symmetric, x_mean = 0
-    x_norm = np.arange(-maxfit_size + 0.5, maxfit_size + 0.5)
-    y_mean = np.mean(intdiff, axis=1, keepdims=True)
-    y_norm = intdiff - y_mean
-    slope = np.sum(x_norm[np.newaxis, :] * y_norm, 1) / np.sum(x_norm * x_norm)
-    r_dev = - y_mean[:, 0] / slope
-
-    # mask invalid fits
-    threshold *= fitregion.max()  # relative to global maximum
-    valid = (np.isfinite(r_dev) &   # finite result
-             (fitregion > 0).all(1) &  # all pixels in fitregion > 0
-             (fitregion.mean(1) > threshold) & # fitregion mean > threshold
-             (r_dev > -maxfit_size + 0.5) &  # maximum inside fit region
-             (r_dev < maxfit_size - 0.5))
-    r_dev[~valid] = np.nan
-    return r_dev + maxes
-
-
-def refine_disks(image, blobs, rad_range=None, threshold=0.5, max_dev=1):
-    """ Refine multiple Hough detected blobs """
-    result = blobs.copy()
-    if 'accum' in result:
-        del result['accum']
-    result['mass'] = np.nan
-    result['signal'] = np.nan
-    for i in result.index:
-        fit, _ = fit_edge_2d(image, blobs.loc[i], rad_range, threshold,
-                             max_dev)
-        if fit is None:
-            result.loc[i, ['r', 'y', 'x']] = np.nan
-            continue
-
-        r, _, yc, xc = fit
-        result.loc[i, ['r', 'y', 'x']] = r, yc, xc
-        coords = np.array([(yc, xc)])
-        square, origin = slice_image(coords, image, r+1)
-        if origin is None:  # outside of image
-            continue
-        mask = binary_mask_multiple(coords - origin, square.shape, r)
-        result.loc[i, 'mass'] = square[mask].sum()
-        result.loc[i, 'signal'] = result.loc[i, 'mass'] / mask.sum()
-
-    return result
-
-
-def fit_edge_2d(image, params, rad_range=None, threshold=0.5, max_dev=1):
-    """ Find a circle based on the blob """
-    if rad_range is None:
-        rad_range = (-params.r / 2, params.r / 2)
-
-    # Get intensity in spline representation
-    coords = (params.r, params.r, params.y, params.x)
-    intensity, pos, normal = get_intensity_interpolation(image, coords,
-                                                         rad_range)
-
-    # Check whether the intensity interpolation is bright on left, dark on right
-    if np.mean(intensity[:, 0]) < 2 * np.mean(intensity[:, -1]):
-        return None, None
-
-    # Find the coordinates of the edge
-    r_dev = find_edge(intensity, threshold)
-    if np.sum(np.isnan(r_dev)) / len(r_dev) > 0.5:
-        return None, None
-
-    # Set outliers to mean of rest of x coords
-    # r_dev = remove_outliers(r_dev)
-
-    # Convert to cartesian
-    coord_new = mapped_coords_to_normal_coords(pos, r_dev, rad_range, normal)
-
-    # Fit the circle
-    try:
-        (radius, _), (yc, xc), _ = fit_ellipse(coord_new, mode='xy')
-    except np.linalg.LinAlgError:
-        return None, None
-    if np.any(np.isnan([radius, yc, xc])):
-        return None, None
-    if not rad_range[0] < radius - params.r < rad_range[1]:
-        return None, None
-
-    # calculate deviations from circle
-    y, x = coord_new
-    deviations2 = (np.sqrt((xc - x)**2 + (yc - y)**2) - radius)**2
-    mask = deviations2 < max_dev**2
-    if np.sum(mask) / len(mask) < 0.5:
-        return None, None
-
-    if np.any(~mask):
-        try:
-            (radius, _), (yc, xc), _ = fit_ellipse(coord_new[:, mask],
-                                                   mode='xy')
-        except np.linalg.LinAlgError:
-            return None, None
-        if np.any(np.isnan([radius, yc, xc])):
-            return None, None
-
-    return (radius, radius, yc, xc), coord_new.T
-
-
-def find_edge(intensity, threshold=0.5):
-    """ Find strongest decreasing edge on each row """
-    derivative = -1*np.diff(intensity.astype(np.int))
-    index = np.argmax(derivative, axis=1)
-    values = np.array([derivative[i, index[i]] for i in range(len(derivative))],
-                      dtype=intensity.dtype)
-    r_dev = index + 0.5
-    r_dev[values < threshold * values.max()] = np.nan
-    return r_dev
-#
-#
-# def remove_outliers(edge_coords):
-#     edge_coords = pd.DataFrame(edge_coords, columns=['x'])
-#     mean = np.mean(edge_coords.x)
-#     comparison = 0.2 * mean
-#     mask_outlier = abs(edge_coords.x - mean) > comparison
-#     mask_no_outlier = abs(edge_coords.x - mean) <= comparison
-#     mean_no_outlier = np.mean(edge_coords[mask_no_outlier].x)
-#     edge_coords.ix[mask_outlier, 'x'] = mean_no_outlier
-#     return edge_coords.x.values
-
-
-# def create_binary_mask(intensity, threshold=None):
-#     if threshold is None:
-#         threshold = threshold_otsu(intensity)
-#     mask = intensity > threshold
-#
-#     # Fill holes in binary mask
-#     mask = scipy.ndimage.morphology.binary_fill_holes(mask)
-#
-#     return mask
-
-
-def get_intensity_interpolation(image, params, rad_range, num_points=None,
-                                spline_order=3):
-    """ Generate the intensity interpolation used for edge finding """
     yr, xr, yc, xc = params
+    # compute the r coordinates
     steps = np.arange(rad_range[0], rad_range[1] + 1, 1)
+    # compute the (y, x) positions and unit normals of the ellipse
     pos, normal = ellipse_grid((yr, xr), (yc, xc), n=num_points, spacing=1)
+    # calculate all the (y, x) coordinates on which the image interpolated.
+    # this is a 3D array of shape [n_theta, n_r, 2], with 2 being y and x.
     coords = normal[:, :, np.newaxis] * steps[np.newaxis, np.newaxis, :] + \
         pos[:, :, np.newaxis]
-
-    # interpolate the image on calculated coordinates
+    # interpolate the image on computed coordinates
     intensity = map_coordinates(image, coords, order=spline_order)
     return intensity, pos, normal
 
 
-def mapped_coords_to_normal_coords(pos, r_dev, rad_range, normal):
-    """ Generate the intensity interpolation used for edge finding """
-    # calculate new coords
-    coord_new = pos + (r_dev + rad_range[0]) * normal
+def to_cartesian(r_dev, pos, normal):
+    """ Transform radial deviations from an ellipsoidal grid to Cartesian
+
+    Parameters
+    ----------
+    r_dev : ndarray, shape (N, )
+        Array containing the N radial deviations from the ellipse. r < 0 means
+        inside the ellipse.
+    pos : ndarray, shape (2, N)
+        The N (y, x) positions of the ellipse (as given by ``ellipse_grid``)
+    normal : ndarray, shape (2, N)
+        The N (y, x) unit normals of the ellipse (as given by ``ellipse_grid``)
+    """
+    coord_new = pos + r_dev * normal
     coord_new = coord_new[:, np.isfinite(coord_new).all(0)]
     return coord_new
 
@@ -239,12 +112,11 @@ def refine_ellipse(image, params, mode='ellipse_aligned', n=None,
         rad_range = (-min(yr, xr) / 2, min(yr, xr) / 2)
 
     # interpolate the image on calculated coordinates
-    intensity, pos, normal = get_intensity_interpolation(image, params,
-                                                         rad_range, n)
+    intensity, pos, normal = unwrap_ellipse(image, params, rad_range, n)
 
     # identify the regions around the max value
-    r_dev = fit_max_2d(intensity, maxfit_size, threshold)
-    coord_new = mapped_coords_to_normal_coords(pos, r_dev, rad_range, normal)
+    r_dev = max_linregress(intensity, maxfit_size, threshold) + rad_range[0]
+    coord_new = to_cartesian(r_dev, pos, normal)
 
     # fit ellipse
     radius, center, _ = fit_ellipse(coord_new, mode=mode)
@@ -366,7 +238,7 @@ def refine_ellipsoid(image3d, params, spacing=1, rad_range=None, maxfit_size=2,
     intensity = map_coordinates(image3d, coords, order=spline_order)
 
     # identify the regions around the max value
-    r_dev = fit_max_2d(intensity, maxfit_size, threshold)
+    r_dev = max_linregress(intensity, maxfit_size, threshold)
 
     # calculate new coords
     coord_new = pos + (r_dev + rad_range[0])*normal
@@ -376,3 +248,83 @@ def refine_ellipsoid(image3d, params, spacing=1, rad_range=None, maxfit_size=2,
     radius, center, skew = fit_ellipsoid(coord_new, mode='xy',
                                          return_mode='skew')
     return tuple(radius) + tuple(center) + tuple(skew), coord_new.T
+
+
+def refine_disks(image, blobs, rad_range=None, threshold=0.5, max_dev=1):
+    """ Refine the position and size of multiple bright disks in an image """
+    result = blobs.copy()
+    if 'accum' in result:
+        del result['accum']
+    result['mass'] = np.nan
+    result['signal'] = np.nan
+    for i in result.index:
+        fit, _ = _refine_disks(image, blobs.loc[i], rad_range, threshold,
+                               max_dev)
+        if fit is None:
+            result.loc[i, ['r', 'y', 'x']] = np.nan
+            result.loc[i, ['r', 'y', 'x']] = np.nan
+            continue
+
+        r, _, yc, xc = fit
+        result.loc[i, ['r', 'y', 'x']] = r, yc, xc
+        coords = np.array([(yc, xc)])
+        square, origin = slice_image(coords, image, r+1)
+        if origin is None:  # outside of image
+            continue
+        mask = get_mask(coords - origin, square.shape, r)
+        result.loc[i, 'mass'] = square[mask].sum()
+        result.loc[i, 'signal'] = result.loc[i, 'mass'] / mask.sum()
+
+    return result
+
+
+def _refine_disks(image, params, rad_range=None, threshold=0.5, max_dev=1):
+    if rad_range is None:
+        rad_range = (-params.r / 2, params.r / 2)
+
+    # Get intensity in spline representation
+    coords = (params.r, params.r, params.y, params.x)
+    intensity, pos, normal = unwrap_ellipse(image, coords, rad_range)
+
+    # Check whether the intensity interpolation is bright on left, dark on right
+    if np.mean(intensity[:, 0]) < 2 * np.mean(intensity[:, -1]):
+        return None, None
+
+    # Find the coordinates of the edge
+    r_dev = max_edge(intensity, threshold) + rad_range[0]
+    if np.sum(np.isnan(r_dev)) / len(r_dev) > 0.5:
+        return None, None
+
+    # Set outliers to mean of rest of x coords
+    # r_dev = remove_outliers(r_dev)
+
+    # Convert to cartesian
+    coord_new = to_cartesian(r_dev, pos, normal)
+
+    # Fit the circle
+    try:
+        (radius, _), (yc, xc), _ = fit_ellipse(coord_new, mode='xy')
+    except np.linalg.LinAlgError:
+        return None, None
+    if np.any(np.isnan([radius, yc, xc])):
+        return None, None
+    if not rad_range[0] < radius - params.r < rad_range[1]:
+        return None, None
+
+    # calculate deviations from circle
+    y, x = coord_new
+    deviations2 = (np.sqrt((xc - x)**2 + (yc - y)**2) - radius)**2
+    mask = deviations2 < max_dev**2
+    if np.sum(mask) / len(mask) < 0.5:
+        return None, None
+
+    if np.any(~mask):
+        try:
+            (radius, _), (yc, xc), _ = fit_ellipse(coord_new[:, mask],
+                                                   mode='xy')
+        except np.linalg.LinAlgError:
+            return None, None
+        if np.any(np.isnan([radius, yc, xc])):
+            return None, None
+
+    return (radius, radius, yc, xc), coord_new.T

@@ -9,41 +9,31 @@ MODE_DICT_ELLIPSOID = {'sphere': 'xyz', 'prolate': 'xy', 'oblate': 'xy',
                        'ellipsoid': '', 'ellipsoid_aligned': '0',
                        'prolate_aligned': '0xy', 'oblate_aligned': '0xy'}
 
-def to_cartesian(r, theta, center = (0, 0)):
-    y = r * np.sin(theta) + center[0]
-    x = r * np.cos(theta) + center[1]
-    return y, x
-
-
-def to_radial(y, x, center=(0, 0)):
-    yc = y - center[0]
-    xc = x - center[1]    
-    r = np.sqrt(yc**2 + xc**2)
-    theta = np.arctan2(yc, xc)
-    return r, theta
-
-
-def ellipse_perimeter(a, b):
-    """Approximation by Ramanujan"""
-    h = ((a - b)**2)/((a + b)**2)
-    return np.pi*(a+b)*(1 + 3*h/(10 + np.sqrt(4 - 3*h)))
-
 
 def fit_ellipse(coords, mode=''):
-    """ Fits an ellipse algebraically to datapoints
+    """ Fits an ellipse to datapoints using an algebraic method.
+
+    This method is different from least squares minimization of the distnace
+    between each datapoint and the fitted ellipse (so-called geometrical
+    approach). For circles, this makes no difference. The higher the aspect
+    ratio of the ellipse, the worse the approximation gets.
 
     Parameters
     ----------
     coords : numpy array of floats
         array of shape (N, 2) containing datapoints
-    mode : {'', 'xy', '0'}
-        '' or None fits an arbitrary ellipse (default)
-        'xy' fits a circle
-        '0' fits an ellipsoid with its axes aligned along [x y] axes
+    mode : {'circle', 'ellipse', 'ellipse_aligned'}
+        'ellipse' or None fits an arbitrary ellipse (default)
+        'circle' fits a circle
+        'ellipse_aligned' fits an ellipse with its axes aligned along [x y] axes
 
     Returns
     -------
     center, radii, angle
+
+    References
+    ----------
+    .. [1] Bertoni B (2010) Multi-dimensional ellipsoidal fitting.
     """
     if coords.shape[0] != 2:
         raise ValueError('Input data must have two columns!')
@@ -107,7 +97,7 @@ def fit_ellipse(coords, mode=''):
 
 def fit_ellipsoid(coords, mode='', return_mode=''):
     """
-    Fit an ellispoid/sphere/paraboloid/hyperboloid to a set of xyz data points:
+    Fit an ellipsoid/sphere/paraboloid/hyperboloid to a set of xyz data points:
 
     Parameters
     ----------
@@ -381,3 +371,77 @@ def ellipsoid_grid(radius, center, spacing=1):
 
     mask = np.isfinite(pos).all(0) & np.isfinite(normal).all(0)
     return pos[:, mask], normal[:, mask]
+
+
+def max_linregress(arr, maxfit_size=2, threshold=0.1, axis=1):
+    """ Locates maxima by fitting parabolas to values around the maximum.
+
+    This function is optimized for two-dimensional numpy arrays. For each row
+    in the array, the index of the maximum value is located. Then some values
+    around it (given by ``maxfit_size``) are taken, the first (discrete)
+    derivative is taken, and linear regression is done. This gives the location
+    of the maximum with sub-pixel precision. Effectively, a parabola is fitted.
+
+    Parameters
+    ----------
+    arr : ndarray
+    maxfit_size : integer, optional
+        Defines the fit region around the maximum value. By default, this value
+        is 2, that is, two pixels before and two pixels after the maximum are
+        used for the fit (a total of 5).
+    threshold :
+        Discard points when the average value of the fit region is lower than
+        ``threshold`` times the maximum in the whole fit array. This helps
+        discarding low-intensity peaks. Default 0.1: if the average intensity
+        in the fitregion is below 10% of the global maximum, the point is
+        discarded.
+    axis : {0, 1}
+        axis along which the maxima are fitted. Default 1.
+
+    Returns
+    -------
+    ndarray with the locations of the maxima.
+    Elements are NaN in all of the following cases:
+     - any pixel in the fitregion is 0
+     - the mean of the fitregion < threshold * global max
+     - regression returned infinity
+     - maximum is outside of the fit region.
+    """
+    if axis == 0:
+        arr = arr.T
+    # identify the regions around the max value
+    maxes = np.argmax(arr[:, maxfit_size:-maxfit_size],
+                      axis=1) + maxfit_size
+    ind = maxes[:, np.newaxis] + range(-maxfit_size, maxfit_size+1)
+    fitregion = np.array([_int.take(_ind) for _int, _ind in zip(arr, ind)],
+                         dtype=np.int32)
+
+    # fit max using linear regression
+    intdiff = np.diff(fitregion, 1)
+    x_norm = np.arange(-maxfit_size + 0.5, maxfit_size + 0.5)
+    y_mean = np.mean(intdiff, axis=1, keepdims=True)
+    y_norm = intdiff - y_mean
+    slope = np.sum(x_norm[np.newaxis, :] * y_norm, 1) / np.sum(x_norm * x_norm)
+    r_dev = - y_mean[:, 0] / slope
+
+    # mask invalid fits
+    threshold *= fitregion.max()  # relative to global maximum
+    valid = (np.isfinite(r_dev) &   # finite result
+             (fitregion > 0).all(1) &  # all pixels in fitregion > 0
+             (fitregion.mean(1) > threshold) & # fitregion mean > threshold
+             (r_dev > -maxfit_size + 0.5) &  # maximum inside fit region
+             (r_dev < maxfit_size - 0.5))
+    r_dev[~valid] = np.nan
+    return r_dev + maxes
+
+
+def max_edge(arr, threshold=0.5, axis=1):
+    """ Find strongest decreasing edge on each row """
+    if axis == 0:
+        arr = arr.T
+    derivative = -1*np.diff(arr)
+    index = np.argmax(derivative, axis=1)
+    values = np.max(derivative, axis=1)
+    r_dev = index + 0.5
+    r_dev[values < threshold * values.max()] = np.nan
+    return r_dev

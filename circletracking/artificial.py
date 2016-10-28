@@ -2,6 +2,7 @@ from __future__ import (division, unicode_literals)
 
 import warnings
 import numpy as np
+from trackpy.utils import validate_tuple
 from numpy.testing import assert_almost_equal
 from scipy.ndimage.interpolation import zoom, shift
 from scipy.ndimage.measurements import center_of_mass
@@ -224,14 +225,6 @@ class SimulatedImage(object):
             return eliminate_overlapping_locations(positions, separation)
         else:
             return positions
-
-
-def validate_tuple(value, ndim):
-    if not hasattr(value, '__iter__'):
-        return (value,) * ndim
-    if len(value) == ndim:
-        return tuple(value)
-    raise ValueError("List length should have same length as image dimensions.")
 
 
 def draw_feature(image, position, diameter, max_value=None,

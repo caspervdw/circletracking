@@ -38,13 +38,11 @@ def locate_ellipse(frame, mode='ellipse_aligned', n=None, rad_range=None,
     """
     assert frame.ndim == 2
     columns = ['yr', 'xr', 'yc', 'xc']
-    try:
-        params = find_ellipse(frame, mode)
-        params, r = refine_ellipse(frame, params, mode, n, rad_range,
-                                   maxfit_size, spline_order, threshold)
-    except Exception:
-        params = [np.nan] * 4
-        r = None
+    params = find_ellipse(frame, mode)
+    params, r = refine_ellipse(frame, params, mode, n, rad_range,
+                               maxfit_size, spline_order, threshold)
+        # params = [np.nan] * 4
+        # r = None
 
     return pd.Series(params, index=columns), r
 
@@ -87,14 +85,13 @@ def locate_ellipsoid_fast(frame, n_xy=None, n_xz=None, rad_range=None,
     """
     assert frame.ndim == 3
     columns = ['zr', 'yr', 'xr', 'zc', 'yc', 'xc']
-    try:
-        params = find_ellipsoid(frame)
-        params, r = refine_ellipsoid_fast(frame, params, n_xy, n_xz, rad_range,
-                                          maxfit_size, spline_order, threshold,
-                                          radius_rtol, radius_atol, center_atol)
-    except Exception:
-        params = [np.nan] * 6
-        r = None
+    params = find_ellipsoid(frame)
+    params, r = refine_ellipsoid_fast(frame, params, n_xy, n_xz, rad_range,
+                                      maxfit_size, spline_order, threshold,
+                                      radius_rtol, radius_atol, center_atol)
+    # except Exception:
+    #     params = [np.nan] * 6
+    #     r = None
 
     return pd.Series(params, index=columns), r
 
@@ -126,22 +123,21 @@ def locate_ellipsoid(frame, spacing=1, rad_range=None, maxfit_size=2,
     """
     assert frame.ndim == 3
     columns = ['zr', 'yr', 'xr', 'zc', 'yc', 'xc', 'skew_y', 'skew_x']
-    try:
-        params = find_ellipsoid(frame)
-        params, r = refine_ellipsoid(frame, params, spacing, rad_range,
-                                     maxfit_size, spline_order, threshold)
-        r = r[np.abs(r[:, 0] - params[3]) < 0.5]  # extract center coords
-    except Exception:
-        params = [np.nan] * 8
-        r = None
+    params = find_ellipsoid(frame)
+    params, r = refine_ellipsoid(frame, params, spacing, rad_range,
+                                 maxfit_size, spline_order, threshold)
+    r = r[np.abs(r[:, 0] - params[3]) < 0.5]  # extract center coords
+    # except Exception:
+    #     params = [np.nan] * 8
+    #     r = None
 
     return pd.Series(params, index=columns), r
 
 
-def locate_disks(image, size_range, number_of_disks=100, rad_range=None,
-                 threshold=0.5, max_dev=1, canny_sigma=None):
+def locate_disks(image, size_range, maximum=100, rad_range=None,
+                 threshold=0.5, max_dev=1, canny_sigma=1):
     """ Find circular particles in the image """
-    blobs = find_disks(image, size_range, number_of_disks, canny_sigma)
+    blobs = find_disks(image, size_range, maximum, canny_sigma)
 
     if blobs.empty:
         return pd.DataFrame(columns=['r', 'y', 'x', 'dev'])
