@@ -4,7 +4,7 @@ import six
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from trackpy.utils import validate_tuple
+from trackpy.utils import validate_tuple, guess_pos_columns
 from functools import wraps
 
 
@@ -65,7 +65,7 @@ def get_visible_clim(ax):
     try:
         axim = ax.get_images()[0]
     except IndexError:
-        return
+        return 0., 1.
     sh_y, sh_x = axim.get_size()
     ext_x_lo, ext_x_hi, ext_y_lo, ext_y_hi = axim.get_extent()
     if ext_y_lo > ext_y_hi:
@@ -349,4 +349,36 @@ def annotate_ellipsoid(params, axs=None, crop_radius=1.2, **kwargs):
     ax_xy.set_xlim(xc - crop_radius * xr, xc + crop_radius * xr)
     ax_xy.set_ylim(yc - crop_radius * yr, yc + crop_radius * yr)
     ax_zy.set_xlim(zc - crop_radius * zr, zc + crop_radius * zr)
+    return axs
+
+
+@wrap_imshow3d
+def scatter3d(features, mode='all', center=None, mpp=1.,
+              axs=None, pos_columns=None, slice_thickness=1., **kwargs):
+    _kwargs = dict(markersize=15, markeredgewidth=2,
+                   markerfacecolor='none', markeredgecolor='r',
+                   marker='o', linestyle='none')
+    _kwargs.update(kwargs)
+    mpp = validate_tuple(mpp, ndim=3)
+    slice_thickness = validate_tuple(slice_thickness, ndim=3)
+    ax_xy, ax_zy, ax_zx, ax_extra = axs
+    if pos_columns is None:
+        pos_columns = guess_pos_columns(features)
+
+    coords = features[pos_columns].values * mpp
+    if mode == 'all':
+        feat_xy = coords[:, 2], coords[:, 1]
+        feat_zy = coords[:, 0], coords[:, 1]
+        feat_zx = coords[:, 2], coords[:, 0]
+    elif mode == 'slice':
+        masks = [(coords[:, i] >= center[i] - slice_thickness[i] / 2) &
+                 (coords[:, i] <= center[i] + slice_thickness[i] / 2)
+                 for i in range(3)]
+        feat_xy = coords[masks[0], 2], coords[masks[0], 1]
+        feat_zy = coords[masks[2], 0], coords[masks[2], 1]
+        feat_zx = coords[masks[1], 2], coords[masks[1], 0]
+
+    ax_xy.plot(*feat_xy, **_kwargs)
+    ax_zy.plot(*feat_zy, **_kwargs)
+    ax_zx.plot(*feat_zx, **_kwargs)
     return axs
