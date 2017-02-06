@@ -336,7 +336,8 @@ def ellipse_grid(radius, center, rotation=0, skew=0, n=None, spacing=1):
 
 
 def ellipsoid_grid(radius, center, spacing=1):
-    """ Returns points and normal (unit) vectors on an ellipse.
+    """ Returns points and normal (unit) vectors on an ellipse on only
+    integer values of z.
 
     Parameters
     ----------
@@ -355,7 +356,7 @@ def ellipsoid_grid(radius, center, spacing=1):
     zr, yr, xr = radius
 
     pos = np.empty((3, 0))
-    for z in range(int(zc-zr), int(zc+zr) + 1):
+    for z in range(int(zc - zr + 1), int(zc + zr) + 1):
         n = int(2*np.pi*np.sqrt((yr**2 + xr**2) / 2) / spacing)
         if n == 0:
             continue
@@ -413,8 +414,21 @@ def max_linregress(arr, maxfit_size=2, threshold=0.1, axis=1):
     maxes = np.argmax(arr[:, maxfit_size:-maxfit_size],
                       axis=1) + maxfit_size
     ind = maxes[:, np.newaxis] + range(-maxfit_size, maxfit_size+1)
+
+    # must cast dtype from unsigned to signed integer
+    dtype = np.dtype(arr.dtype)
+    if dtype.kind == 'u':
+        if dtype.itemsize == 1:
+            dtype = np.int16
+        elif dtype.itemsize == 2:
+            dtype = np.int32
+        else:
+            dtype = np.int64
+    else:
+        dtype = arr.dtype
+
     fitregion = np.array([_int.take(_ind) for _int, _ind in zip(arr, ind)],
-                         dtype=np.int32)
+                         dtype=dtype)
 
     # fit max using linear regression
     intdiff = np.diff(fitregion, 1)
@@ -422,15 +436,17 @@ def max_linregress(arr, maxfit_size=2, threshold=0.1, axis=1):
     y_mean = np.mean(intdiff, axis=1, keepdims=True)
     y_norm = intdiff - y_mean
     slope = np.sum(x_norm[np.newaxis, :] * y_norm, 1) / np.sum(x_norm * x_norm)
+    slope[slope == 0] = np.nan  # protect against division by zero
     r_dev = - y_mean[:, 0] / slope
 
     # mask invalid fits
-    threshold *= fitregion.max()  # relative to global maximum
-    valid = (np.isfinite(r_dev) &   # finite result
-             (fitregion > 0).all(1) &  # all pixels in fitregion > 0
-             (fitregion.mean(1) > threshold) & # fitregion mean > threshold
-             (r_dev > -maxfit_size + 0.5) &  # maximum inside fit region
-             (r_dev < maxfit_size - 0.5))
+    threshold = threshold * fitregion.max()    # relative to global maximum
+    with np.errstate(invalid='ignore'):  # ignore comparison with np.nan
+        valid = (np.isfinite(r_dev) &              # finite result
+                 (fitregion > 0).all(1) &          # all pixels in fitregion > 0
+                 (fitregion.mean(1) > threshold) & # fitregion mean > threshold
+                 (r_dev > -maxfit_size + 0.5) &    # maximum inside fit region
+                 (r_dev < maxfit_size - 0.5))
     r_dev[~valid] = np.nan
     return r_dev + maxes
 

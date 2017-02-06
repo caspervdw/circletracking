@@ -2,11 +2,17 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 import six
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from trackpy.utils import validate_tuple, guess_pos_columns
 from functools import wraps
+from pims import to_rgb
 
+def is_rgb(image, ndim=2, allow_rgba=True):
+    shape = image.shape
+    return len(shape) == ndim + 1 and (shape[-1] == 3 or
+                                      (image.shape[-1] == 4 and allow_rgba))
 
 def wrap_imshow(func):
     @wraps(func)
@@ -14,10 +20,8 @@ def wrap_imshow(func):
         normed = kwargs.pop('normed', True)
         if kwargs.get('ax') is None:
             kwargs['ax'] = plt.gca()
-            def draw_callback(event):
-                adjust_imshow(kwargs['ax'], normed)
-            kwargs['ax'].figure.canvas.mpl_connect('draw_event', draw_callback)
-        return func(*args, **kwargs)
+        ax = func(*args, **kwargs)
+        return adjust_imshow(ax, normed)
     return wrapper
 
 
@@ -29,14 +33,14 @@ def wrap_imshow3d(func):
         spacing = kwargs.pop('spacing', 0.05)
         if kwargs.get('axs') is None:
             fig = plt.gcf()
-            axs = fig.add_subplot(221), fig.add_subplot(222), \
-                  fig.add_subplot(223), fig.add_subplot(224)
-            axs[3].set_visible(False)
-            kwargs['axs'] = axs
-            def draw_callback(event):
-                adjust_imshow3d(kwargs['axs'], aspect, spacing, normed)
-            fig.canvas.mpl_connect('draw_event', draw_callback)
-        return func(*args, **kwargs)
+            # make square by adjusting height
+            w, h = fig.get_size_inches()
+            fig.set_size_inches(w, w)
+            kwargs['axs'] = fig.add_subplot(221), fig.add_subplot(222), \
+                            fig.add_subplot(223), fig.add_subplot(224)
+            kwargs['axs'][3].set_visible(False)
+        axs = func(*args, **kwargs)
+        return adjust_imshow3d(axs, aspect, spacing, normed)
     return wrapper
 
 
@@ -77,23 +81,31 @@ def get_visible_clim(ax):
     origin = [ext_y_lo / mpp[0] + 0.5,
               ext_x_lo / mpp[0] + 0.5]
 
-    x_lo, x_hi = ax.get_xlim()
-    y_hi, y_lo = ax.get_ylim()
+    x_lo, x_hi = sorted(ax.get_xlim())
+    y_lo, y_hi = sorted(ax.get_ylim())
 
     slice_x = slice(max(int(round(x_lo / mpp[1] + 0.5 - origin[1])), 0),
                     min(int(round(x_hi / mpp[1] + 0.5 - origin[1])), sh_x))
     slice_y = slice(max(int(round(y_lo / mpp[0] + 0.5 - origin[0])), 0),
                     min(int(round(y_hi / mpp[0] + 0.5 - origin[0])), sh_y))
     im = axim.get_array()[slice_y, slice_x]
+    if im.size == 0:
+        return 0., 1.
     return im.min(), im.max()
 
 
-def norm_axesimage(axim, vmin, vmax):
+def norm_axesimage(ax, vmin, vmax):
+    try:
+        axim = ax.get_images()[0]
+    except IndexError:
+        return
     im = axim.get_array()
     if im.ndim == 3:  # RGB, custom norm
         if vmax - vmin > 0:
-            axim.set_array((im - vmin) / (vmax - vmin))
-        axim.set_clim(0, 1)  # this is actually ignored
+            # the masked array may give underflowerror here
+            with np.errstate(under='ignore'):
+                axim.set_array((im - vmin) / (vmax - vmin))
+        axim.set_clim(0, 1)  # this is actually ignored for RGB by mpl
     else:  # use built-in
         axim.set_clim(vmin, vmax)
     return axim
@@ -114,20 +126,17 @@ def adjust_imshow(ax, normed=True):
     ax.grid(False)
     # get maximum pixel values
     if normed:
-        rng = get_visible_clim(ax)
-        if rng is not None:
-            norm_axesimage(ax.get_images()[0], *rng)
+        norm_axesimage(ax, *get_visible_clim(ax))
     return ax
 
 
 def adjust_imshow3d(axs, aspect=1., spacing=0.05, normed=True):
     ax_xy, ax_zy, ax_zx, ax_extra = axs
 
-    # disable autoscaling, use tight layout
+    # disable autoscaling
     ax_xy.autoscale(False, 'both', tight=False)
     ax_zy.autoscale(False, 'both', tight=False)
     ax_zx.autoscale(False, 'both', tight=False)
-    ax_extra.autoscale(False, 'both', tight=False)
 
     # set aspect ratio
     ax_xy.set_aspect('equal', 'box')
@@ -149,6 +158,7 @@ def adjust_imshow3d(axs, aspect=1., spacing=0.05, normed=True):
     ax_zx.set_xlim(x_lo, x_hi)
     ax_zx.set_ylim(z_hi, z_lo)
 
+    # make a gridspec
     gs = gridspec.GridSpec(2, 2,
                            width_ratios=[x_hi - x_lo, aspect * (z_hi - z_lo)],
                            height_ratios=[y_hi - y_lo, aspect * (z_hi - z_lo)],
@@ -160,7 +170,9 @@ def adjust_imshow3d(axs, aspect=1., spacing=0.05, normed=True):
 
     # position and hide the correct ticks
     ax_xy.xaxis.tick_top()
+    ax_xy.xaxis.set_label_position("top")
     ax_zy.xaxis.tick_top()
+    ax_zy.xaxis.set_label_position("top")
     plt.setp(ax_xy.get_xticklabels() + ax_xy.get_yticklabels() +
              ax_zy.get_xticklabels() + ax_zx.get_yticklabels(),
              visible=True)
@@ -178,18 +190,20 @@ def adjust_imshow3d(axs, aspect=1., spacing=0.05, normed=True):
         vmin_zy, vmax_zy = get_visible_clim(ax_zy)
         vmin_zx, vmax_zx = get_visible_clim(ax_zx)
         vmin = min(vmin_xy, vmin_zy, vmin_zx)
-        vmax = min(vmax_xy, vmax_zy, vmax_zx)
+        vmax = max(vmax_xy, vmax_zy, vmax_zx)
         for ax in [ax_xy, ax_zy, ax_zx]:
-            norm_axesimage(ax.get_images()[0], vmin, vmax)
+            norm_axesimage(ax, vmin, vmax)
     return axs
 
 
 @wrap_imshow
-def imshow(image, ax=None, mpp=1., origin=(0, 0), **kwargs):
+def imshow(image, ax=None, mpp=1., origin=(0, 0), ax_labels=False, **kwargs):
     """Show an image. Origin is in pixels."""
     _imshow_style = dict(origin='lower', interpolation='nearest',
                          cmap=plt.cm.gray, aspect='equal')
     _imshow_style.update(kwargs)
+    if not is_rgb(image, ndim=2):
+        image = to_rgb(image, kwargs.pop('colors', None), normed=False) / 255.
     shape = image.shape[:2]
     mpp = validate_tuple(mpp, ndim=2)
     origin = validate_tuple(origin, ndim=2)
@@ -204,11 +218,22 @@ def imshow(image, ax=None, mpp=1., origin=(0, 0), **kwargs):
     ax.imshow(image, extent=extent, **_imshow_style)
     ax.set_xlim(extent[0], extent[1])
     ax.set_ylim(extent[3], extent[2])
+
+    if ax_labels:
+        if mpp == 1.:
+            fmt = '{} [px]'
+        elif mpl.rcParams['text.usetex']:
+            fmt = r'{} [\textmu m]'
+        else:
+            fmt = r'{} [\xb5m]'
+        ax.set_xlabel(fmt.format('x'))
+        ax.set_ylabel(fmt.format('y'))
     return ax
+
 
 @wrap_imshow3d
 def imshow3d(image3d, mode='max', center=None, mpp=1.,
-             origin=(0, 0, 0), axs=None, **kwargs):
+             origin=(0, 0, 0), axs=None, ax_labels=False, **kwargs):
     """Shows the xy, xz, and yz projections of a 3D image.
 
     Parameters
@@ -234,6 +259,8 @@ def imshow3d(image3d, mode='max', center=None, mpp=1.,
     imshow_style = dict(origin='lower', interpolation='nearest',
                         cmap=plt.cm.gray, aspect='auto')
     imshow_style.update(kwargs)
+    if not is_rgb(image3d, ndim=3):
+        image3d = to_rgb(image3d, kwargs.pop('colors', None), normed=False) / 255.
     shape = image3d.shape[:3]
     mpp = validate_tuple(mpp, ndim=3)
     origin = validate_tuple(origin, ndim=3)
@@ -245,11 +272,12 @@ def imshow3d(image3d, mode='max', center=None, mpp=1.,
         image_zy = image3d.max(2)
     elif mode == 'slice':
         center_i = [int(round(c - o)) for c, o in zip(center, origin)]
+        center_i = [min(max(c, 0), sh - 1) for c, sh in zip(center_i, shape)]
         image_xy = image3d[center_i[0], :, :]
         image_zx = image3d[:, center_i[1], :]
         image_zy = image3d[:, :, center_i[2]]
     else:
-        raise ValueError
+        raise ValueError('Unknown mode "{}"'.format(mode))
 
     if image_zy.ndim == 3:
         image_zy = np.transpose(image_zy, (1, 0, 2))
@@ -279,6 +307,18 @@ def imshow3d(image3d, mode='max', center=None, mpp=1.,
     ax_zy.set_ylim(extent[3], extent[2], auto=False)
     ax_zx.set_xlim(extent[0], extent[1], auto=False)
     ax_zx.set_ylim(extent[5], extent[4], auto=False)
+
+    if ax_labels:
+        if mpp == 1.:
+            fmt = '{} [px]'
+        elif mpl.rcParams['text.usetex']:
+            fmt = r'{} [\textmu m]'
+        else:
+            fmt = r'{} [\xb5m]'
+        ax_xy.set_xlabel(fmt.format('x'))
+        ax_xy.set_ylabel(fmt.format('y'))
+        ax_zy.set_xlabel(fmt.format('z'))
+        ax_zx.set_ylabel(fmt.format('z'))
     return axs
 
 
