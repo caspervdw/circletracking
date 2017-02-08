@@ -11,6 +11,7 @@ from .algebraic import ellipse_grid, ellipsoid_grid, fit_ellipse, fit_ellipsoid
 # Generate artificial data for testing purposes
 from .artificial import draw_ellipsoid, draw_ellipse, SimulatedImage
 from . import plot
+from . import fluctuation
 
 from ._version import get_versions
 __version__ = get_versions()['version']
