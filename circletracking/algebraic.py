@@ -455,7 +455,9 @@ def max_edge(arr, threshold=0.5, axis=1):
     """ Find strongest decreasing edge on each row """
     if axis == 0:
         arr = arr.T
-    derivative = -1*np.diff(arr)
+    if np.issubdtype(arr.dtype, np.unsignedinteger):
+        arr = arr.astype(np.int)
+    derivative = -np.diff(arr)
     index = np.argmax(derivative, axis=1)
     values = np.max(derivative, axis=1)
     r_dev = index + 0.5
