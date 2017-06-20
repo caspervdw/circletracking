@@ -251,7 +251,8 @@ def refine_ellipsoid(image3d, params, spacing=1, rad_range=None, maxfit_size=2,
     return tuple(radius) + tuple(center) + tuple(skew), coord_new.T
 
 
-def refine_disks(image, blobs, rad_range=None, threshold=0.5, max_dev=1):
+def refine_disks(image, blobs, rad_range=None, threshold=0.5, max_dev=1,
+                 min_points=10, min_contrast=0):
     """ Refine the position and size of multiple bright disks in an image """
     result = blobs.copy()
     if 'accum' in result:
@@ -260,7 +261,7 @@ def refine_disks(image, blobs, rad_range=None, threshold=0.5, max_dev=1):
     result['signal'] = np.nan
     for i in result.index:
         fit, _ = _refine_disks(image, blobs.loc[i], rad_range, threshold,
-                               max_dev)
+                               max_dev, min_points, min_contrast)
         if fit is None:
             result.loc[i, ['r', 'y', 'x']] = np.nan
             result.loc[i, ['r', 'y', 'x']] = np.nan
@@ -279,7 +280,8 @@ def refine_disks(image, blobs, rad_range=None, threshold=0.5, max_dev=1):
     return result
 
 
-def _refine_disks(image, params, rad_range=None, threshold=0.5, max_dev=1):
+def _refine_disks(image, params, rad_range=None, threshold=0.5, max_dev=1,
+                  min_points=10., min_contrast=0):
     if rad_range is None:
         rad_range = (-params.r / 2, params.r / 2)
 
@@ -288,12 +290,12 @@ def _refine_disks(image, params, rad_range=None, threshold=0.5, max_dev=1):
     intensity, pos, normal = unwrap_ellipse(image, coords, rad_range)
 
     # Check whether the intensity interpolation is bright on left, dark on right
-    if np.mean(intensity[:, 0]) < 2 * np.mean(intensity[:, -1]):
+    if np.mean(intensity[:, 0]) - np.mean(intensity[:, -1]) < min_contrast:
         return None, None
 
     # Find the coordinates of the edge
     r_dev = max_edge(intensity, threshold) + rad_range[0]
-    if np.sum(np.isnan(r_dev)) / len(r_dev) > 0.5:
+    if np.sum(~np.isnan(r_dev)) < min_points:
         return None, None
 
     # Set outliers to mean of rest of x coords
@@ -316,7 +318,7 @@ def _refine_disks(image, params, rad_range=None, threshold=0.5, max_dev=1):
     y, x = coord_new
     deviations2 = (np.sqrt((xc - x)**2 + (yc - y)**2) - radius)**2
     mask = deviations2 < max_dev**2
-    if np.sum(mask) / len(mask) < 0.5:
+    if np.sum(mask) < min_points:
         return None, None
 
     if np.any(~mask):
