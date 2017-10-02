@@ -2,7 +2,7 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 import six
 import numpy as np
-from trackpy.utils import validate_tuple
+from .utils import validate_tuple
 
 
 def get_slice(coords, shape, radius):

@@ -2,7 +2,7 @@ from __future__ import (division, unicode_literals)
 
 import warnings
 import numpy as np
-from trackpy.utils import validate_tuple
+from .utils import validate_tuple
 from numpy.testing import assert_almost_equal
 from scipy.ndimage.interpolation import zoom, shift
 from scipy.ndimage.measurements import center_of_mass

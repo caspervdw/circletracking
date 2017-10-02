@@ -19,7 +19,7 @@ from skimage.feature import peak_local_max
 import pandas as pd
 from scipy.spatial import cKDTree
 from .algebraic import fit_ellipse
-from trackpy.utils import validate_tuple
+from .utils import validate_tuple
 
 
 def find_disks(image, size_range, maximum=100, canny_sigma=1):

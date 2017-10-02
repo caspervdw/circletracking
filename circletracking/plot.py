@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from trackpy.utils import validate_tuple, guess_pos_columns
+from .utils import validate_tuple, guess_pos_columns
 from functools import wraps
 from pims import to_rgb
 
@@ -62,7 +62,7 @@ def invert_ax(ax, which='both', invert=True, auto=None):
         if not invert and low > hi:
             ax.set_ylim(low, hi, auto=auto)
     return ax
-
+from skimage.measure import find_contours
 
 def get_visible_clim(ax):
     """Obtains the sliced image displayed on ax"""
