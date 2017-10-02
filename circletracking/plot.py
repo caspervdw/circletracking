@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from .utils import validate_tuple, guess_pos_columns
 from functools import wraps
-from pims import to_rgb
+
 
 def is_rgb(image, ndim=2, allow_rgba=True):
     shape = image.shape
@@ -203,6 +203,10 @@ def imshow(image, ax=None, mpp=1., origin=(0, 0), ax_labels=False, **kwargs):
                          cmap=plt.cm.gray, aspect='equal')
     _imshow_style.update(kwargs)
     if not is_rgb(image, ndim=2):
+        try:
+            from pims import to_rgb
+        except ImportError:
+            raise ImportError("Imshow requires PIMS to display a non-RGB image")
         image = to_rgb(image, kwargs.pop('colors', None), normed=False) / 255.
     shape = image.shape[:2]
     mpp = validate_tuple(mpp, ndim=2)
@@ -260,6 +264,10 @@ def imshow3d(image3d, mode='max', center=None, mpp=1.,
                         cmap=plt.cm.gray, aspect='auto')
     imshow_style.update(kwargs)
     if not is_rgb(image3d, ndim=3):
+        try:
+            from pims import to_rgb
+        except ImportError:
+            raise ImportError("Imshow requires PIMS to display a non-RGB image")
         image3d = to_rgb(image3d, kwargs.pop('colors', None), normed=False) / 255.
     shape = image3d.shape[:3]
     mpp = validate_tuple(mpp, ndim=3)
